@@ -43,13 +43,13 @@ public class InactiveAccountPage extends BasePage {
     }
 
     public InactiveAccountPage enterNewEmail(String email) {
-        readyElement(By.id("inactiveAccountForm:emailField:email"))
+        readyElement(By.id("inactiveAccountForm:email:input:email"))
                 .sendKeys(email);
         return new InactiveAccountPage(getDriver());
     }
 
     public HomePage clickUpdateEmail() {
-        clickElement(By.id("inactiveAccountForm:emailField:updateEmail"));
+        clickElement(By.id("inactiveAccountForm:email:input:updateEmail"));
         return new HomePage(getDriver());
     }
 }
