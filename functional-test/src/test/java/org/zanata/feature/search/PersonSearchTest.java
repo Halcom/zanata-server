@@ -21,21 +21,19 @@
 
 package org.zanata.feature.search;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.zanata.feature.Feature;
-import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.feature.testharness.TestPlan.DetailedTest;
+import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.page.BasePage;
 import org.zanata.page.account.ProfilePage;
-import org.zanata.util.AddUsersRule;
-import org.zanata.util.EnsureLogoutRule;
 import org.zanata.workflow.BasicWorkFlow;
 import org.zanata.workflow.LoginWorkFlow;
+
+import com.google.common.base.Splitter;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Damian Jansen <a
@@ -43,12 +41,6 @@ import org.zanata.workflow.LoginWorkFlow;
  */
 @Category(DetailedTest.class)
 public class PersonSearchTest extends ZanataTestCase {
-
-    @ClassRule
-    public static AddUsersRule addUsersRule = new AddUsersRule();
-
-    @Rule
-    public EnsureLogoutRule ensureLogoutRule = new EnsureLogoutRule();
 
     @Feature(summary = "The user can search for another user",
             tcmsTestPlanIds = 5316, tcmsTestCaseIds = 0)
@@ -69,8 +61,9 @@ public class PersonSearchTest extends ZanataTestCase {
                 .isEqualTo("translator");
         assertThat(profilePage.getDisplayName().trim())
                 .isEqualTo("translator");
-        assertThat(profilePage.getLanguages().trim())
-                .isEqualTo("Hindi, Polish, French");
+        String languages = profilePage.getLanguages().trim();
+        assertThat(Splitter.on(",").trimResults().split(languages))
+                .contains("Hindi", "Polish", "French");
 
     }
 

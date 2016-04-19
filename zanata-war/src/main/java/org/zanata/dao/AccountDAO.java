@@ -22,17 +22,14 @@ import org.hibernate.Criteria;
 import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.criterion.Restrictions;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.AutoCreate;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.util.Hex;
+
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Named;
 import org.zanata.model.HAccount;
 import org.zanata.util.PasswordUtil;
 
-@Name("accountDAO")
-@AutoCreate
-@Scope(ScopeType.STATELESS)
+@Named("accountDAO")
+@RequestScoped
 public class AccountDAO extends AbstractDAOImpl<HAccount, Long> {
     public AccountDAO() {
         super(HAccount.class);
@@ -92,7 +89,7 @@ public class AccountDAO extends AbstractDAOImpl<HAccount, Long> {
             md5.reset();
             byte[] digest = md5.digest(salted);
 
-            return new String(Hex.encodeHex(digest));
+            return new String(PasswordUtil.encodeHex(digest));
 
         } catch (Exception exc) {
             throw new RuntimeException(exc);

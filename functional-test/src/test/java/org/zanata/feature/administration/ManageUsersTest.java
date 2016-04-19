@@ -21,17 +21,15 @@
 package org.zanata.feature.administration;
 
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.zanata.feature.Feature;
-import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.feature.testharness.TestPlan.DetailedTest;
+import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.page.account.SignInPage;
 import org.zanata.page.administration.ManageUserAccountPage;
 import org.zanata.page.dashboard.DashboardBasePage;
-import org.zanata.util.AddUsersRule;
 import org.zanata.util.HasEmailRule;
 import org.zanata.workflow.BasicWorkFlow;
 import org.zanata.workflow.LoginWorkFlow;
@@ -46,10 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ManageUsersTest extends ZanataTestCase {
 
     @Rule
-    public AddUsersRule addUsersRule = new AddUsersRule();
-
-    @ClassRule
-    public static HasEmailRule emailRule = new HasEmailRule();
+    public final HasEmailRule emailRule = new HasEmailRule();
 
     private DashboardBasePage dashboardPage;
 

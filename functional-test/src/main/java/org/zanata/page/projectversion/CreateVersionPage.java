@@ -21,13 +21,11 @@
 package org.zanata.page.projectversion;
 
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.interactions.Actions;
 import org.zanata.page.BasePage;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,7 +37,7 @@ public class CreateVersionPage extends BasePage {
             "must start and end with letter or number, and contain only " +
                     "letters, numbers, periods, underscores and hyphens.";
 
-    public By projectVersionID = By.id("create-version-form:slugField:slug");
+    public By projectVersionID = By.id("create-version-form:slug:input:slug");
     private By projectTypeSelection = By.id("create-version-form:project-type");
     private By saveButton = By.id("create-version-form:button-create");
     private By copyFromPreviousVersionChk = By.id("create-version-form:copy-from-version");
@@ -59,16 +57,7 @@ public class CreateVersionPage extends BasePage {
      */
     public CreateVersionPage inputVersionId(final String versionId) {
         log.info("Enter version ID {}", versionId);
-        waitForAMoment().until(new Predicate<WebDriver>() {
-            @Override
-            public boolean apply(WebDriver input) {
-                getVersionIdField().clear();
-                new Actions(getDriver()).moveToElement(getVersionIdField())
-                        .perform();
-                getVersionIdField().sendKeys(versionId);
-                return true;
-            }
-        });
+        enterText(getVersionIdField(), versionId);
         return new CreateVersionPage(getDriver());
     }
 
@@ -98,7 +87,7 @@ public class CreateVersionPage extends BasePage {
             clickCopyFromCheckbox();
         }
         readyElement(previousVersionsList);
-        return this;
+        return new CreateVersionPage(getDriver());
     }
 
     public CreateVersionPage disableCopyFromVersion() {
@@ -113,7 +102,7 @@ public class CreateVersionPage extends BasePage {
             clickCopyFromCheckbox();
         }
         readyElement(projectTypesList);
-        return this;
+        return new CreateVersionPage(getDriver());
     }
 
     public boolean copyFromVersionIsChecked() {
@@ -130,19 +119,16 @@ public class CreateVersionPage extends BasePage {
     public CreateVersionPage selectProjectType(final String projectType) {
         log.info("Click project type {}", projectType);
         WebElement projectTypeCheck = waitForAMoment()
-                .until(new Function<WebDriver, WebElement>() {
-            @Override
-            public WebElement apply(WebDriver input) {
-                for (WebElement item : readyElement(projectTypeSelection)
-                        .findElements(By.tagName("li"))) {
-                    if (item.findElement(By.tagName("label")).getText()
-                            .startsWith(projectType)) {
-                        return item;
+                .until((Function<WebDriver, WebElement>) webDriver -> {
+                    for (WebElement item : readyElement(projectTypeSelection)
+                            .findElements(By.tagName("li"))) {
+                        if (item.findElement(By.tagName("label")).getText()
+                                .startsWith(projectType)) {
+                            return item;
+                        }
                     }
-                }
-                return null;
-            }
-        });
+                    return null;
+                });
         projectTypeCheck.click();
         return new CreateVersionPage(getDriver());
     }

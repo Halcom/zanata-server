@@ -22,6 +22,7 @@
 package org.zanata.action;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.security.DigestInputStream;
@@ -34,17 +35,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.faces.application.FacesMessage;
+import javax.faces.bean.ViewScoped;
 import javax.validation.ConstraintViolationException;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.faces.FacesMessages;
+import javax.inject.Inject;
+import javax.inject.Named;
+import org.richfaces.event.FileUploadEvent;
+import org.richfaces.model.UploadedFile;
 import org.zanata.exception.AuthorizationException;
-import org.jboss.seam.util.Hex;
 import org.zanata.async.handle.CopyVersionTaskHandle;
 import org.zanata.common.DocumentType;
 import org.zanata.common.EntityStatus;
@@ -83,9 +83,11 @@ import org.zanata.ui.AbstractListFilter;
 import org.zanata.ui.AbstractSortAction;
 import org.zanata.ui.CopyAction;
 import org.zanata.ui.InMemoryListFilter;
+import org.zanata.ui.faces.FacesMessages;
 import org.zanata.ui.model.statistic.WordStatistic;
 import org.zanata.util.DateUtil;
 import org.zanata.util.FileUtil;
+import org.zanata.util.PasswordUtil;
 import org.zanata.util.ServiceLocator;
 import org.zanata.util.StatisticsUtil;
 import org.zanata.util.UrlUtil;
@@ -104,56 +106,56 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-@Name("versionHomeAction")
-@Scope(ScopeType.PAGE)
+@Named("versionHomeAction")
+@ViewScoped
 @Slf4j
 public class VersionHomeAction extends AbstractSortAction implements
         Serializable {
     private static final long serialVersionUID = 1L;
 
-    @In
+    @Inject
     private CopyVersionManager copyVersionManager;
 
-    @In
+    @Inject
     private MergeTranslationsManager mergeTranslationsManager;
 
-    @In
+    @Inject
     private CopyTransManager copyTransManager;
 
-    @In
+    @Inject
     private ProjectIterationDAO projectIterationDAO;
 
-    @In
+    @Inject
     private DocumentDAO documentDAO;
 
-    @In
+    @Inject
     private LocaleService localeServiceImpl;
 
-    @In
+    @Inject
     private VersionStateCache versionStateCacheImpl;
 
-    @In
+    @Inject
     private TranslationStateCache translationStateCacheImpl;
 
-    @In
+    @Inject
     private Messages msgs;
 
-    @In
+    @Inject
     private DocumentService documentServiceImpl;
 
-    @In
+    @Inject
     private ZanataIdentity identity;
 
-    @In
+    @Inject
     private TranslationFileService translationFileServiceImpl;
 
-    @In
+    @Inject
     private VirusScanner virusScanner;
 
-    @In
+    @Inject
     private LocaleDAO localeDAO;
 
-    @In
+    @Inject
     private TranslationService translationServiceImpl;
 
     @Getter
@@ -174,13 +176,13 @@ public class VersionHomeAction extends AbstractSortAction implements
     @Getter
     private HDocument selectedDocument;
 
-    @In
+    @Inject
     private ConversationScopeMessages conversationScopeMessages;
 
-    @In("filePersistService")
+    @Inject
     private FilePersistService filePersistService;
 
-    @In
+    @Inject
     private UrlUtil urlUtil;
 
     private List<HLocale> supportedLocale;
@@ -342,8 +344,9 @@ public class VersionHomeAction extends AbstractSortAction implements
 
         @Override
         public void onComplete() {
-            FacesMessages.instance().add(FacesMessage.SEVERITY_INFO,
-                getMessages().format("jsf.copyVersion.Completed", versionSlug));
+            getFacesMessages().addGlobal(FacesMessage.SEVERITY_INFO,
+                    getMessages()
+                            .format("jsf.copyVersion.Completed", versionSlug));
         }
 
         public int getProcessedDocuments() {
@@ -369,6 +372,10 @@ public class VersionHomeAction extends AbstractSortAction implements
         private CopyVersionManager getCopyVersionManager() {
             return ServiceLocator.instance().getInstance(
                     CopyVersionManager.class);
+        }
+
+        private FacesMessages getFacesMessages() {
+            return ServiceLocator.instance().getInstance(FacesMessages.class);
         }
 
         protected CopyVersionTaskHandle getHandle() {
@@ -458,7 +465,7 @@ public class VersionHomeAction extends AbstractSortAction implements
 
     @Override
     protected String getMessage(String key, Object... args) {
-        return msgs.format(key, args);
+        return msgs.formatWithAnyArgs(key, args);
     }
 
     public List<HLocale> getSupportedLocale() {
@@ -613,8 +620,10 @@ public class VersionHomeAction extends AbstractSortAction implements
     public boolean isUserAllowedToTranslateOrReview(HLocale hLocale) {
         return isVersionActive()
                 && identity != null
-                && (identity.hasPermission("add-translation", getVersion()
-                        .getProject(), hLocale) || identity.hasPermission(
+                && (identity.hasPermissionWithAnyTargets("add-translation",
+                        getVersion().getProject(),
+                        hLocale) ||
+                identity.hasPermissionWithAnyTargets(
                         "translation-review", getVersion().getProject(),
                         hLocale));
     }
@@ -658,12 +667,14 @@ public class VersionHomeAction extends AbstractSortAction implements
 
     public boolean isDocumentUploadAllowed() {
         return isVersionActive() && identity != null
-                && identity.hasPermission("import-template", getVersion());
+                && identity.hasPermissionWithAnyTargets("import-template",
+                getVersion());
     }
 
     public boolean isZipFileDownloadAllowed() {
         return getVersion().getProjectType() != null
-                && identity.hasPermission("download-all", getVersion());
+                && identity.hasPermissionWithAnyTargets("download-all",
+                getVersion());
     }
 
     public boolean isPoProject() {
@@ -706,25 +717,29 @@ public class VersionHomeAction extends AbstractSortAction implements
     public boolean isFileUploadAllowed(HLocale hLocale) {
         return isVersionActive()
                 && identity != null
-                && identity.hasPermission("modify-translation", getVersion()
+                && identity.hasPermissionWithAnyTargets("modify-translation",
+                getVersion()
                         .getProject(), hLocale);
     }
 
-    private DocumentType getDocumentType(Optional<String> docType) {
+    private Optional<DocumentType> getDocumentType(Optional<String> docType) {
         DocumentType type;
         if (!docType.isPresent()) {
             // if docType null, only 1 document type available for selected file extensions
-            type = translationFileServiceImpl
-                            .getDocumentTypes(sourceFileUpload.getFileName())
-                            .iterator().next();
+            Set<DocumentType> documentTypes = translationFileServiceImpl
+                    .getDocumentTypes(sourceFileUpload.getFileName());
+            if (documentTypes.isEmpty()) {
+                return Optional.absent();
+            }
+            type = documentTypes.iterator().next();
         } else {
             // if docType not null, adapter is selected by user from drop down
             type = DocumentType.getByName(docType.get());
         }
-        return type;
+        return Optional.of(type);
     }
 
-    public void uploadSourceFile() {
+    public String uploadSourceFile() {
         identity.checkPermission("import-template", getVersion());
 
         if (sourceFileUpload.getFileName().endsWith(".pot")) {
@@ -734,18 +749,23 @@ public class VersionHomeAction extends AbstractSortAction implements
             Optional<String> docType =
                 Optional.fromNullable(sourceFileUpload.documentType);
 
-            DocumentType documentType = getDocumentType(docType);
-
-            if (translationFileServiceImpl.hasAdapterFor(documentType)) {
-                uploadAdapterFile(documentType);
+            Optional<DocumentType> documentTypeOpt = getDocumentType(docType);
+            if (documentTypeOpt.isPresent()
+                    && translationFileServiceImpl.hasAdapterFor(documentTypeOpt
+                            .get())) {
+                uploadAdapterFile(documentTypeOpt.get());
+                resetPageData();
             } else {
+                String summary = "Unrecognized file extension for "
+                        +
+                        sourceFileUpload.getFileName();
+                // TODO this message is not displayed
                 conversationScopeMessages.setMessage(
-                        FacesMessage.SEVERITY_INFO,
-                        "Unrecognized file extension for "
-                                + sourceFileUpload.getFileName());
+                        FacesMessage.SEVERITY_INFO, summary);
+                throw new IllegalArgumentException(summary);
             }
         }
-        resetPageData();
+        return "success";
     }
 
     public boolean isPoDocument(String docId) {
@@ -762,8 +782,8 @@ public class VersionHomeAction extends AbstractSortAction implements
     public String translationExtensionOf(String docPath, String docName) {
         return "."
             + translationFileServiceImpl.getTranslationFileExtension(
-            projectSlug,
-            versionSlug, docPath, docName);
+                projectSlug,
+                versionSlug, docPath, docName);
     }
 
     public boolean hasOriginal(String docPath, String docName) {
@@ -919,7 +939,8 @@ public class VersionHomeAction extends AbstractSortAction implements
         } else {
             HRawDocument rawDocument = new HRawDocument();
             rawDocument.setDocument(document);
-            rawDocument.setContentHash(new String(Hex.encodeHex(md5hash)));
+            rawDocument.setContentHash(new String(
+                    PasswordUtil.encodeHex(md5hash)));
             rawDocument.setType(docType);
             rawDocument.setUploadedBy(identity.getCredentials().getUsername());
 
@@ -963,7 +984,7 @@ public class VersionHomeAction extends AbstractSortAction implements
 
     public List<DocumentType> getDocumentTypes(String fileName) {
         return Lists.newArrayList(
-            translationFileServiceImpl.getDocumentTypes(fileName));
+                translationFileServiceImpl.getDocumentTypes(fileName));
     }
 
     public void setDefaultTranslationDocType(String fileName) {
@@ -981,7 +1002,7 @@ public class VersionHomeAction extends AbstractSortAction implements
         return urlUtil.encodeString(docId);
     }
 
-    public void uploadTranslationFile(HLocale hLocale) {
+    public String uploadTranslationFile(HLocale hLocale) {
         identity.checkPermission("modify-translation", hLocale, getVersion()
                 .getProject());
         try {
@@ -1040,15 +1061,39 @@ public class VersionHomeAction extends AbstractSortAction implements
                     warningMessages.add(new FacesMessage(
                             FacesMessage.SEVERITY_WARN, warning, null));
                 }
-                conversationScopeMessages.setMessages(warningMessages);
+                conversationScopeMessages.addMessages(warningMessages);
             }
         } catch (ZanataServiceException e) {
             conversationScopeMessages.setMessage(FacesMessage.SEVERITY_ERROR,
                     translationFileUpload.getFileName() + "-" + e.getMessage());
         }
         resetPageData();
+        return "success";
     }
 
+    public void sourceFileUploaded(FileUploadEvent event) throws IOException {
+        UploadedFile uploadedFile = event.getUploadedFile();
+        sourceFileUpload.setFileName(uploadedFile.getName());
+        sourceFileUpload.setFileContents(uploadedFile.getInputStream());
+//        return "/iteration/view.xhtml?projectSlug=" + projectSlug +"&iterationSlug=" + versionSlug;
+
+    }
+
+    public void clearSourceFileUpload() {
+        sourceFileUpload = new SourceFileUploadHelper();
+    }
+
+    public void transFileUploaded(FileUploadEvent event) throws IOException {
+        UploadedFile uploadedFile = event.getUploadedFile();
+        translationFileUpload.setFileName(uploadedFile.getName());
+        translationFileUpload.setFileContents(uploadedFile.getInputStream());
+    }
+
+    public void clearTransFileUpload() {
+        translationFileUpload = new TranslationFileUploadHelper();
+    }
+
+    // TODO turn this into a CDI bean?
     private class DocumentFilter extends InMemoryListFilter<HDocument> {
         private DocumentDAO documentDAO =
                 ServiceLocator.instance().getInstance(DocumentDAO.class);
@@ -1065,6 +1110,7 @@ public class VersionHomeAction extends AbstractSortAction implements
         }
     };
 
+    // TODO turn this into a CDI bean?
     private class SourceDocumentFilter extends InMemoryListFilter<HDocument> {
         private DocumentDAO documentDAO = ServiceLocator.instance()
                 .getInstance(DocumentDAO.class);

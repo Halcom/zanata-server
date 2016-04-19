@@ -23,8 +23,6 @@ package org.zanata.service.impl;
 
 import static com.google.common.collect.Collections2.filter;
 
-import javax.enterprise.inject.Alternative;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,15 +42,16 @@ import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.util.Version;
 import org.hibernate.search.jpa.FullTextEntityManager;
 import org.hibernate.search.jpa.FullTextQuery;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
+
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.inject.Named;
 import org.zanata.common.ContentState;
 import org.zanata.common.EntityStatus;
 import org.zanata.common.LocaleId;
 import org.zanata.hibernate.search.IndexFieldLabels;
 import org.zanata.hibernate.search.TextContainerAnalyzerDiscriminator;
+import org.zanata.jpa.FullText;
 import org.zanata.model.HDocument;
 import org.zanata.model.HLocale;
 import org.zanata.model.HProject;
@@ -61,6 +60,7 @@ import org.zanata.model.HSimpleComment;
 import org.zanata.model.HTextFlow;
 import org.zanata.model.HTextFlowTarget;
 import org.zanata.model.tm.TransMemoryUnit;
+import org.zanata.model.tm.TransMemoryUnitVariant;
 import org.zanata.rest.editor.dto.suggestion.Suggestion;
 import org.zanata.rest.editor.dto.suggestion.SuggestionDetail;
 import org.zanata.rest.editor.dto.suggestion.TextFlowSuggestionDetail;
@@ -89,12 +89,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nonnull;
+
 /**
  * @author Alex Eng <a href="mailto:aeng@redhat.com">aeng@redhat.com</a>
  */
-@Alternative
-@Name("translationMemoryServiceImpl")
-@Scope(ScopeType.STATELESS)
+@Named("translationMemoryServiceImpl")
+@RequestScoped
 @Slf4j
 public class TranslationMemoryServiceImpl implements TranslationMemoryService {
 
@@ -122,14 +123,18 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
 //    private static final float BOOST_PROJITERSLUG = SysProperties.getFloat(
 //            SysProperties.TM_BOOST_PROJITERSLUG, 1.5f);
 
-    @In
+    private static final double MINIMUM_SIMILARITY = 1.0;
+
+    @Inject @FullText
     private FullTextEntityManager entityManager;
 
     private static final Version LUCENE_VERSION = Version.LUCENE_29;
 
     // sort desc by lastChanged of HTextFlowTarget
-    private final Sort lastChangedSort = new Sort(new SortField(
-            IndexFieldLabels.LAST_CHANGED_FIELD, SortField.STRING, true));
+    private final Sort lastChangedSort = new Sort(
+            SortField.FIELD_SCORE,
+            new SortField(IndexFieldLabels.LAST_CHANGED_FIELD,
+                    SortField.STRING, true));
 
     private final TermQuery newStateQuery = new TermQuery(new Term(
             IndexFieldLabels.CONTENT_STATE_FIELD, ContentState.New.toString()));
@@ -312,19 +317,21 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
             LocaleId targetLocaleId, LocaleId sourceLocaleId,
             TransMemoryQuery transMemoryQuery, int maxResults,
             Optional<Long> textFlowTargetId,
-            Class<?>... entities) {
+            @Nonnull Class<?>... entityTypes) {
         try {
-            if (entities == null || entities.length < 1) {
+            if (entityTypes.length == 0) {
                 throw new RuntimeException(
                         "Need entity type (HTextFlowTarget.class or TransMemoryUnit.class) for TM search");
             }
             List<Object[]> matches =
                     getSearchResult(transMemoryQuery, sourceLocaleId,
-                            targetLocaleId, maxResults, textFlowTargetId, entities);
+                            targetLocaleId, maxResults, textFlowTargetId, entityTypes);
 
             // filter out invalid target
+            // TODO filter by entityTypes as well
+            // TODO returning a filtered collection might be overkill
             return Collections2.filter(matches,
-                    ValidTargetFilterPredicate.INSTANCE);
+                    new ValidTargetFilterPredicate(targetLocaleId));
 
         } catch (ParseException e) {
             if (transMemoryQuery.getSearchType() == HasSearchType.SearchType.RAW) {
@@ -354,8 +361,18 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
                     Lists.newArrayList(textFlowTarget.getContents());
             TransMemoryResultItem.MatchType matchType =
                     fromContentState(textFlowTarget.getState());
-            TransMemoryResultItem item = createOrGetResultItem(transMemoryQuery, matchesMap, match, matchType,
-                    textFlowContents, targetContents);
+
+            double percent =
+                calculateSimilarityPercentage(transMemoryQuery,
+                    textFlowContents);
+            if (percent < MINIMUM_SIMILARITY) {
+                log.info("Ignoring TM - {} with less than {}% matching.",
+                    textFlowContents, MINIMUM_SIMILARITY);
+                return;
+            }
+            TransMemoryResultItem item = createOrGetResultItem(
+                    matchesMap, match, matchType,
+                    textFlowContents, targetContents, percent);
             addTextFlowTargetToResultMatches(textFlowTarget, item);
         } else if (entity instanceof TransMemoryUnit) {
             TransMemoryUnit transUnit = (TransMemoryUnit) entity;
@@ -365,8 +382,17 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
             ArrayList<String> targetContents =
                     Lists.newArrayList(transUnit.getTransUnitVariants()
                             .get(targetLocaleId.getId()).getPlainTextSegment());
-            TransMemoryResultItem item = createOrGetResultItem(transMemoryQuery, matchesMap, match,
-                    TransMemoryResultItem.MatchType.Imported, sourceContents, targetContents);
+            double percent =
+                calculateSimilarityPercentage(transMemoryQuery, sourceContents);
+            if (percent < MINIMUM_SIMILARITY) {
+                log.info("Ignoring TM - {} with less than {}% matching.",
+                        sourceContents, MINIMUM_SIMILARITY);
+                return;
+            }
+            TransMemoryResultItem item =
+                createOrGetResultItem(matchesMap, match,
+                    TransMemoryResultItem.MatchType.Imported,
+                    sourceContents, targetContents, percent);
             addTransMemoryUnitToResultMatches(item, transUnit);
         }
     }
@@ -425,16 +451,15 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
      *
      * @return the item for the given source and target contents, which may be newly created.
      */
-    private TransMemoryResultItem createOrGetResultItem(TransMemoryQuery transMemoryQuery, Map<TMKey,
-            TransMemoryResultItem> matchesMap, Object[] match, TransMemoryResultItem.MatchType matchType,
-                                                        ArrayList<String> sourceContents, ArrayList<String> targetContents) {
+    private TransMemoryResultItem createOrGetResultItem(
+            Map<TMKey, TransMemoryResultItem> matchesMap, Object[] match,
+            TransMemoryResultItem.MatchType matchType,
+            ArrayList<String> sourceContents, ArrayList<String> targetContents,
+            double percent) {
         TMKey key = new TMKey(sourceContents, targetContents);
         TransMemoryResultItem item = matchesMap.get(key);
         if (item == null) {
             float score = (Float) match[0];
-            double percent =
-                    calculateSimilarityPercentage(transMemoryQuery,
-                            sourceContents);
             item =
                     new TransMemoryResultItem(sourceContents, targetContents,
                             matchType, score, percent);
@@ -607,11 +632,29 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
 
         List<Object[]> resultList = (List<Object[]>) ftQuery.getResultList();
         if (!resultList.isEmpty() && resultList.size() == maxResult) {
-            log.info(
-                    "Lucene query returned exactly {} results.  Increasing {} might produce more matches.",
-                    resultList.size(), SysProperties.TM_MAX_RESULTS);
+            log.warn(
+                    "Lucene query returned {} results (out of approx {}). " +
+                            "Increasing {} might produce more matches.",
+                    resultList.size(), ftQuery.getResultSize(),
+                    SysProperties.TM_MAX_RESULTS);
+            logQueryResults(resultList);
         }
         return resultList;
+    }
+
+    private void logQueryResults(List<Object[]> resultList) {
+        if (log.isTraceEnabled()) {
+            // resultList.get() could be a little slow if resultList is a
+            // LinkedList, but in practice HSearch seems to use ArrayLists,
+            // plus we only iterate up to 10 elements.
+            int numToLog = Math.min(resultList.size(), 10);
+            for (int i = 0; i < numToLog; i++) {
+                Object[] arr = resultList.get(i);
+                Number score = (Number) arr[0];
+                Object entity = arr[1];
+                log.trace("{}[{}]: {}", i, score, entity);
+            }
+        }
     }
 
     /**
@@ -877,36 +920,65 @@ public class TranslationMemoryServiceImpl implements TranslationMemoryService {
 
     private static class ValidTargetFilterPredicate implements
             Predicate<Object[]> {
-        public static final ValidTargetFilterPredicate INSTANCE = new ValidTargetFilterPredicate();
+        private final LocaleId localeId;
+
+        public ValidTargetFilterPredicate(LocaleId localeId) {
+            this.localeId = localeId;
+        }
+
         @Override
         public boolean apply(Object[] input) {
             Object entity = input[1];
             if (entity instanceof HTextFlowTarget) {
                 HTextFlowTarget target = (HTextFlowTarget) entity;
-
-                if (!target.getState().isTranslated()) {
-                    log.warn("Unexpected TFT with state {}: {}",
-                            target.getState(), entity);
+                if (!target.getLocaleId().equals(localeId)) {
+                    log.error(
+                            "Unexpected TextFlowTarget (locale {}): {}. You may need to re-index.",
+                            target.getLocaleId(), target);
+                    return false;
+                } else if (!target.getState().isTranslated()) {
+                    log.error(
+                            "Unexpected TextFlowTarget (state {}): {}. You may need to re-index.",
+                            target.getState(), target);
                     return false;
                 } else {
                     HProjectIteration version =
                             target.getTextFlow().getDocument()
                                     .getProjectIteration();
                     if (version.getStatus() == EntityStatus.OBSOLETE) {
-                        log.debug("Discarding TFT result from obsolete iteration {}: {}",
-                                version, entity);
+                        log.debug(
+                                "Discarding TextFlowTarget (obsolete iteration {}): {}",
+                                version, target);
                         return false;
                     } else if (version.getProject().getStatus() ==
                             EntityStatus.OBSOLETE) {
-                        log.debug("Discarding TFT result from obsolete project {}: {}",
-                                version.getProject(), entity);
+                        log.debug(
+                                "Discarding TextFlowTarget (obsolete project {}): {}",
+                                version.getProject(), target);
                         return false;
                     }
                 }
                 return true;
+            } else if (entity instanceof TransMemoryUnit) {
+                TransMemoryUnit tmu = ((TransMemoryUnit) entity);
+                boolean includesTargetLocale =
+                        tmu.getTransUnitVariants().containsKey(localeId.getId());
+                if (!includesTargetLocale) {
+                    log.error(
+                            "Unexpected TransMemoryUnit (no TUV in locale {}): {}. You may need to re-index.",
+                            localeId.getId(), tmu);
+                }
+                return includesTargetLocale;
+            } else if (entity == null) {
+                log.error(
+                        "Query results include null entity. You may need to re-index.");
+                return false;
+            } else {
+                log.error(
+                        "Unexpected query result of type {}: {}. You may need to re-index.",
+                        entity.getClass().getName(), entity);
+                return false;
             }
-            log.warn("Unexpected query result of type {}: {}", entity.getClass().getName(), entity);
-            return true;
         }
     }
 

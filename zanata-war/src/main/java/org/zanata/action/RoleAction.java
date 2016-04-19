@@ -4,28 +4,21 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jboss.seam.annotations.Begin;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Install;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.core.Conversation;
+import javax.inject.Inject;
+import org.apache.deltaspike.core.api.exclude.Exclude;
+import org.apache.deltaspike.core.api.projectstage.ProjectStage;
+import javax.inject.Named;
 import org.zanata.seam.security.IdentityManager;
 import org.zanata.security.ZanataIdentity;
 import org.zanata.security.annotations.CheckLoggedIn;
-import org.zanata.security.annotations.ZanataSecured;
-
-import static org.jboss.seam.ScopeType.CONVERSATION;
-import static org.jboss.seam.annotations.Install.APPLICATION;
 
 /**
  * @author Patrick Huang
  *         <a href="mailto:pahuang@redhat.com">pahuang@redhat.com</a>
  */
-@Name("zanataRoleAction")
-@Scope(CONVERSATION)
-@Install(precedence = APPLICATION)
-@ZanataSecured
+@Named("zanataRoleAction")
+@javax.faces.bean.ViewScoped
+
 @CheckLoggedIn
 public class RoleAction implements Serializable {
     private static final long serialVersionUID = -3830647911484729768L;
@@ -33,22 +26,20 @@ public class RoleAction implements Serializable {
     private String role;
     private List<String> groups;
 
-    @In
+    @Inject
     IdentityManager identityManager;
 
-    @In
+    @Inject
     ZanataIdentity identity;
 
-    @Begin
-    public void createRole() {
-        groups = new ArrayList<>();
-    }
-
-    @Begin
-    public void editRole(String role) {
-        this.originalRole = role;
-        this.role = role;
-        groups = identityManager.getRoleGroups(role);
+    public void loadRole() {
+        if (role == null) {
+            // creating new role
+            groups = new ArrayList<>();
+        } else {
+            this.originalRole = role;
+            groups = identityManager.getRoleGroups(role);
+        }
     }
 
     public String save() {
@@ -72,7 +63,6 @@ public class RoleAction implements Serializable {
                 identityManager.addRoleToGroup(role, r);
             }
 
-            Conversation.instance().end();
         }
 
         return "success";
@@ -95,7 +85,10 @@ public class RoleAction implements Serializable {
             }
         }
 
-        Conversation.instance().end();
+        return "success";
+    }
+
+    public String cancel() {
         return "success";
     }
 

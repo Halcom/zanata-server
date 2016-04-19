@@ -1,19 +1,26 @@
 package org.zanata.service.impl;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
+import static org.zanata.transaction.TransactionUtil.runInTransaction;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Future;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
 import lombok.extern.slf4j.Slf4j;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.AutoCreate;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
+
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.inject.Named;
 import org.zanata.async.Async;
 import org.zanata.async.AsyncTaskResult;
-import org.zanata.async.ContainsAsyncMethods;
 import org.zanata.async.handle.CopyVersionTaskHandle;
+import org.zanata.common.EntityStatus;
 import org.zanata.dao.DocumentDAO;
+import org.zanata.dao.ProjectDAO;
 import org.zanata.dao.ProjectIterationDAO;
 import org.zanata.dao.TextFlowDAO;
 import org.zanata.dao.TextFlowTargetDAO;
@@ -37,20 +44,17 @@ import org.zanata.service.VersionStateCache;
 import org.zanata.util.JPACopier;
 import org.zanata.util.TranslationUtil;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.Future;
+import com.google.common.base.Optional;
+import com.google.common.base.Stopwatch;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 /**
  * @author Alex Eng <a href="mailto:aeng@redhat.com">aeng@redhat.com</a>
  */
-@Name("copyVersionServiceImpl")
-@Scope(ScopeType.STATELESS)
+@Named("copyVersionServiceImpl")
+@RequestScoped
 @Slf4j
-@AutoCreate
-@ContainsAsyncMethods
 public class CopyVersionServiceImpl implements CopyVersionService {
 
     // Document batch size
@@ -62,25 +66,25 @@ public class CopyVersionServiceImpl implements CopyVersionService {
     // TextFlowTarget batch size
     protected final static int TFT_BATCH_SIZE = 20;
 
-    @In
+    @Inject
     private ProjectIterationDAO projectIterationDAO;
 
-    @In
+    @Inject
     private DocumentDAO documentDAO;
 
-    @In
+    @Inject
     private TextFlowDAO textFlowDAO;
 
-    @In
+    @Inject
     private TextFlowTargetDAO textFlowTargetDAO;
 
-    @In
+    @Inject
     private VersionStateCache versionStateCacheImpl;
 
-    @In
+    @Inject
     private FilePersistService filePersistService;
 
-    @In
+    @Inject
     private ZanataIdentity identity;
 
     // Stop watch for textFlow and target copy process
@@ -107,51 +111,61 @@ public class CopyVersionServiceImpl implements CopyVersionService {
 
         Stopwatch overallStopwatch = Stopwatch.createStarted();
         log.info("copy version start: copy {} to {}",
-                projectSlug + ":" + versionSlug, projectSlug + ":"
-                        + newVersionSlug);
+            projectSlug + ":" + versionSlug, projectSlug + ":"
+                + newVersionSlug);
 
         // Copy of HProjectIteration
-        HProjectIteration newVersion =
-                projectIterationDAO.getBySlug(projectSlug, newVersionSlug);
+        HProjectIteration newVersion = new HProjectIteration();
 
-        newVersion = copyVersionSettings(version, newVersion);
-        newVersion = projectIterationDAO.makePersistent(newVersion);
+        try {
+            newVersion.setSlug(newVersionSlug);
+            newVersion.setStatus(EntityStatus.READONLY);
+            newVersion.setProject(version.getProject());
+            newVersion = copyVersionSettings(version, newVersion);
+            newVersion = projectIterationDAO.makePersistent(newVersion);
+            projectIterationDAO.flush();
 
-        // Copy of HDocument
-        int docSize =
+            // Copy of HDocument
+            int docSize =
                 documentDAO.getDocCountByVersion(projectSlug, versionSlug);
 
-        int docStart = 0;
-        while (docStart < docSize) {
-            Map<Long, Long> docMap =
+            int docStart = 0;
+            while (docStart < docSize) {
+                Map<Long, Long> docMap =
                     copyDocumentBatch(version.getId(), newVersion.getId(),
-                            docStart, DOC_BATCH_SIZE);
-            docStart += DOC_BATCH_SIZE;
+                        docStart, DOC_BATCH_SIZE);
+                docStart += DOC_BATCH_SIZE;
 
-            for (Map.Entry<Long, Long> entry : docMap.entrySet()) {
-                // Copy of HTextFlow and HTextFlowTarget
-                copyTextFlowAndTarget(entry.getKey(), entry.getValue());
+                for (Map.Entry<Long, Long> entry : docMap.entrySet()) {
+                    // Copy of HTextFlow and HTextFlowTarget
+                    copyTextFlowAndTarget(entry.getKey(), entry.getValue());
 
-                if (taskHandleOpt.isPresent()) {
-                    taskHandleOpt.get().incrementDocumentProcessed();
-                    taskHandleOpt.get().increaseProgress(1);
+                    if (taskHandleOpt.isPresent()) {
+                        taskHandleOpt.get().incrementDocumentProcessed();
+                        taskHandleOpt.get().increaseProgress(1);
+                    }
                 }
             }
-        }
+        } catch (Exception e) {
+            log.error(
+                "Error during copy version from project '{}' {} to {}.",
+                projectSlug, versionSlug, newVersionSlug, e);
+        } finally {
+            // restore version.status after complete
+            newVersion = projectIterationDAO.getBySlug(projectSlug, newVersionSlug);
+            newVersion.setStatus(version.getStatus());
+            projectIterationDAO.makePersistent(newVersion);
+            projectIterationDAO.flush();
 
-        // restore version.status after complete
-        newVersion = projectIterationDAO.getBySlug(projectSlug, newVersionSlug);
-        newVersion.setStatus(version.getStatus());
-        projectIterationDAO.makePersistent(newVersion);
-        projectIterationDAO.flush();
-
-        // clear any cache that has been loaded in this new version before copy
-        // completed
-        versionStateCacheImpl.clearVersionStatsCache(newVersion.getId());
-        log.info("copy version end: copy {} to {}, {}", projectSlug
-                + ":" + versionSlug, projectSlug + ":" + newVersionSlug,
+            // clear any cache that has been loaded in this new version before copy
+            // completed
+            versionStateCacheImpl.clearVersionStatsCache(newVersion.getId());
+            log.info("copy version end: copy {} to {}, {}", projectSlug
+                    + ":" + versionSlug, projectSlug + ":" + newVersionSlug,
                 overallStopwatch);
+        }
     }
+
 
     @Override
     @Async
@@ -189,13 +203,54 @@ public class CopyVersionServiceImpl implements CopyVersionService {
     protected Map<Long, Long> copyDocumentBatch(Long versionId,
             Long newVersionId, int batchStart, int batchLength) {
         try {
-            return new CopyDocumentWork(versionId, newVersionId, documentDAO,
-                    projectIterationDAO, filePersistService, this,
-                    batchStart, batchLength).workInTransaction();
+            return runInTransaction(() -> copyDocument(
+                    versionId, newVersionId, batchStart, batchLength));
         } catch (Exception e) {
             log.warn("exception during copy document", e);
             return Collections.emptyMap();
         }
+    }
+
+    /**
+     * Copy documents from HProjectIteration(id=versionId) in batches(batchStart,
+     * batchLength) into HProjectIteration(id=newVersionId). Copying includes
+     * HRawDocument stored in file system.
+     * @return Map indexed by the original document id, and to the new copied
+     * document id.
+     * @throws Exception
+     */
+    private Map<Long, Long> copyDocument(final Long versionId,
+            final Long newVersionId,
+            final int batchStart,
+            final int batchLength) throws Exception {
+        Map<Long, Long> docMap = Maps.newHashMap();
+
+        HProjectIteration newVersion =
+                projectIterationDAO.findById(newVersionId);
+
+        List<HDocument> documents = documentDAO.findAllByVersionId(versionId,
+                batchStart, batchLength);
+
+        for (HDocument doc : documents) {
+            HDocument newDocument = copyDocument(newVersion, doc);
+            // Needs to persist before inserting raw document
+            newDocument = documentDAO.makePersistent(newDocument);
+
+            if (doc.getRawDocument() != null) {
+                HRawDocument newRawDocument =
+                        copyRawDocument(newDocument, doc.getRawDocument());
+
+                filePersistService.copyAndPersistRawDocument(
+                        doc.getRawDocument(), newRawDocument);
+
+                documentDAO.addRawDocument(newDocument, newRawDocument);
+            }
+            newVersion.getDocuments()
+                    .put(newDocument.getDocId(), newDocument);
+            docMap.put(doc.getId(), newDocument.getId());
+        }
+        documentDAO.flush();
+        return docMap;
     }
 
     /**
@@ -252,13 +307,39 @@ public class CopyVersionServiceImpl implements CopyVersionService {
     protected Map<Long, Long> copyTextFlowBatch(Long documentId,
             Long newDocumentId, int batchStart, int batchLength) {
         try {
-            return new CopyTextFlowWork(documentId, newDocumentId, textFlowDAO,
-                    documentDAO, this, batchStart, batchLength)
-                    .workInTransaction();
+            return runInTransaction(() -> this.copyTextFlows(documentId,
+                    newDocumentId, batchStart, batchLength));
         } catch (Exception e) {
             log.warn("exception during copy text flow", e);
             return Collections.EMPTY_MAP;
         }
+    }
+
+    private Map<Long, Long> copyTextFlows(
+            final Long documentId,
+            final Long newDocumentId,
+            final int batchStart,
+            final int batchLength) throws Exception {
+
+        Map<Long, HTextFlow> tfMap = Maps.newHashMap();
+
+        List<HTextFlow> textFlows = textFlowDAO.getTextFlowsByDocumentId(
+                documentId, batchStart, batchLength);
+
+        HDocument newDocument = documentDAO.getById(newDocumentId);
+        for (HTextFlow textFlow : textFlows) {
+            HTextFlow newTextFlow =
+                    copyTextFlow(newDocument, textFlow);
+
+            newDocument.getTextFlows().add(newTextFlow);
+            newDocument.getAllTextFlows()
+                    .put(newTextFlow.getResId(), newTextFlow);
+            tfMap.put(textFlow.getId(), newTextFlow);
+        }
+        documentDAO.makePersistent(newDocument);
+        documentDAO.flush();
+
+        return Maps.transformEntries(tfMap, (key, value) -> value.getId());
     }
 
     /**
@@ -272,13 +353,41 @@ public class CopyVersionServiceImpl implements CopyVersionService {
     protected int copyTextFlowTargetBatch(Long tfId, Long newTfId,
             int batchStart, int batchLength) {
         try {
-            return new CopyTextFlowTargetWork(tfId, newTfId, textFlowTargetDAO,
-                    textFlowDAO, this, batchStart, batchLength)
-                    .workInTransaction();
+            return runInTransaction(() -> this.copyTextFlowTargets(tfId,
+                    newTfId, batchStart, batchLength));
         } catch (Exception e) {
             log.warn("exception during copy text flow target", e);
             return 0;
         }
+    }
+
+    /**
+     * Copy HTextFlowTarget from HTextFlow(id=tfId) in batches(batchStart,
+     * batchLength) into HTextFlow(id=newTfId).
+     * @return Number of text flow targets copied.
+     * @throws Exception
+     */
+    private Integer copyTextFlowTargets(final Long tfId,
+            final Long newTfId,
+            final int batchStart,
+            final int batchLength) throws Exception {
+        HTextFlow newTextFlow = textFlowDAO.findById(newTfId);
+
+        List<HTextFlowTarget> copyTargets =
+                textFlowTargetDAO
+                        .getByTextFlowId(tfId, batchStart, batchLength);
+
+        for (HTextFlowTarget tft : copyTargets) {
+            HTextFlowTarget newTextFlowTarget =
+                    copyTextFlowTarget(newTextFlow, tft);
+
+            newTextFlow.getTargets()
+                    .put(newTextFlowTarget.getLocale().getId(),
+                            newTextFlowTarget);
+        }
+        textFlowDAO.makePersistent(newTextFlow);
+        textFlowDAO.flush();
+        return copyTargets.size();
     }
 
     @Override

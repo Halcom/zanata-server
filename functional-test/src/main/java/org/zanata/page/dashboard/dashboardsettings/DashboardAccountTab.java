@@ -37,16 +37,18 @@ public class DashboardAccountTab extends DashboardBasePage {
     public static final String FIELD_EMPTY_ERROR = "may not be empty";
 
     public static final String PASSWORD_LENGTH_ERROR =
-            "size must be between 6 and 20";
+            "size must be between 6 and 1024";
 
     public static final String EMAIL_TAKEN_ERROR =
             "This email address is already taken";
 
-    private By emailField = By.id("email-update-form:emailField:email");
-    private By updateEmailButton = By.id("email-update-form:updateEmailButton");
-    private By oldPasswordField = By.id("passwordChangeForm:oldPasswordField:oldPassword");
-    private By newPasswordField = By.id("passwordChangeForm:newPasswordField:newPassword");
-    private By changePasswordButton = By.id("passwordChangeForm:changePasswordButton");
+    private By emailForm = By.id("email-update-form");
+    private By emailField = By.id("email-update-form:emailField:input:email");
+    // Use form and button tag to find the item, as its id is altered by jsf
+    private By updateEmailButton = By.tagName("button");
+    private By oldPasswordField = By.id("passwordChangeForm:oldPasswordField:input:oldPassword");
+    private By newPasswordField = By.id("passwordChangeForm:newPasswordField:input:newPassword");
+    private By changePasswordButton = By.cssSelector("button[id^='passwordChangeForm:changePasswordButton']");
 
     public DashboardAccountTab(WebDriver driver) {
         super(driver);
@@ -55,27 +57,27 @@ public class DashboardAccountTab extends DashboardBasePage {
     public DashboardAccountTab typeNewAccountEmailAddress(String emailAddress) {
         log.info("Enter email {}", emailAddress);
         readyElement(emailField).clear();
-        readyElement(emailField).sendKeys(emailAddress);
+        enterText(readyElement(emailField), emailAddress);
         return new DashboardAccountTab(getDriver());
     }
 
     public DashboardAccountTab clickUpdateEmailButton() {
         log.info("Click Update Email");
-        clickElement(updateEmailButton);
+        clickElement(readyElement(emailForm).findElement(updateEmailButton));
         return new DashboardAccountTab(getDriver());
     }
 
     public DashboardAccountTab typeOldPassword(String oldPassword) {
         log.info("Enter old password {}", oldPassword);
         readyElement(oldPasswordField).clear();
-        readyElement(oldPasswordField).sendKeys(oldPassword);
+        enterText(readyElement(oldPasswordField), oldPassword);
         return new DashboardAccountTab(getDriver());
     }
 
     public DashboardAccountTab typeNewPassword(String newPassword) {
         log.info("Enter new password {}", newPassword);
         readyElement(newPasswordField).clear();
-        readyElement(newPasswordField).sendKeys(newPassword);
+        enterText(readyElement(newPasswordField), newPassword);
         return new DashboardAccountTab(getDriver());
     }
 

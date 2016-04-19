@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class VersionGeneralTab extends VersionBasePage {
-    private By versionIdField = By.id("settings-general_form:slugField:slug");
+    private By versionIdField = By.id("settings-general_form:slug:input:slug");
     private By updateButton = By.id("settings-general_form:updateButton");
 
     public VersionGeneralTab(WebDriver driver) {
@@ -41,7 +41,7 @@ public class VersionGeneralTab extends VersionBasePage {
     public VersionGeneralTab enterVersionID(String newSlug) {
         log.info("Enter project version slug {}", newSlug);
         readyElement(versionIdField).clear();
-        readyElement(versionIdField).sendKeys(newSlug);
+        enterText(readyElement(versionIdField), newSlug);
         defocus(versionIdField);
         return new VersionGeneralTab(getDriver());
     }

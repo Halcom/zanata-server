@@ -1,15 +1,8 @@
 package org.zanata.feature.manual;
 
-import static org.zanata.util.ZanataRestCaller.buildSourceResource;
-import static org.zanata.util.ZanataRestCaller.buildTextFlow;
-import static org.zanata.util.ZanataRestCaller.buildTextFlowTarget;
-import static org.zanata.util.ZanataRestCaller.buildTranslationResource;
-
-import java.util.List;
-
+import com.google.common.collect.ImmutableList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.apache.commons.lang.RandomStringUtils;
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,7 +17,9 @@ import org.zanata.util.SampleDataResourceClient;
 import org.zanata.util.SampleProjectRule;
 import org.zanata.util.ZanataRestCaller;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
+
+import static org.zanata.util.ZanataRestCaller.*;
 
 /**
  * This is a manual test that will help tuning/troubleshooting copyTrans. This
@@ -52,8 +47,10 @@ public class CopyTransTuningTest {
 
     @Before
     public void setUp() throws Exception {
+        // use defaults
+        String pluralForms = null;
         for (LocaleId locale : translatedLocales) {
-            SampleDataResourceClient.addLanguage(locale.getId());
+            SampleDataResourceClient.addLanguage(locale.getId(), pluralForms);
         }
 
         restCaller = new ZanataRestCaller();

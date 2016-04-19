@@ -1,14 +1,70 @@
-## 3.8
-<h5>Infrastructure Changes</h5>
-* In wildfly or EAP standalone.xml, change all occurrences of "org.jboss.seam.security.jaas.SeamLoginModule" to "org.zanata.security.jaas.InternalLoginModule"
+## 3.9
 
 <h5>Infrastructure Changes</h5>
+* [ZNTA-530](https://zanata.atlassian.net/browse/ZNTA-530) - Replace Seam 2 with CDI
+  * In WildFly or EAP `standalone.xml`, please make sure the Weld
+    extension is present in the `extensions` section like this:
 
-Zanata now requires JBoss EAP 6.4.2.GA or later (recommended), or WildFly version 9.0.1.Final or later.
+        <extensions>
+            ...
+            <extension module="org.jboss.as.weld" />
+            ...
+        </extensions>
+
+
+  * Secondly, please ensure the Weld subsystem is present in the
+    `profiles` section, eg like this:
+
+        <profiles>
+            ...
+            <subsystem xmlns="urn:jboss:domain:weld:1.0" />
+            ...
+        </profiles>
 
 
 <h5>Bug fixes</h5>
-* [1233524](https://bugzilla.redhat.com/show_bug.cgi?id=1233524) - Update project search page to include user
+* [ZNTA-804](https://zanata.atlassian.net/browse/ZNTA-804) - Coordinators' email addresses should be BCC in Contact Coordinator
+* [ZNTA-693](https://zanata.atlassian.net/browse/ZNTA-693) - Handle ClientAbortException exception and reduce severity.
+* [ZNTA-742](https://zanata.atlassian.net/browse/ZNTA-742) - Get a list of contributors for a Project version via the API
+* [ZNTA-744](https://zanata.atlassian.net/browse/ZNTA-744) - Add review data to the contribution statistics API
+* [ZNTA-879](https://zanata.atlassian.net/browse/ZNTA-879) - Allow admin to configure the visibility of user email
+* [ZNTA-412](https://zanata.atlassian.net/browse/ZNTA-412) - Profile link to project maintainers, language members, and version group maintainers
+* [ZNTA-905](https://zanata.atlassian.net/browse/ZNTA-905) - Remove 0% matching translation memory entry
+* [ZNTA-928](https://zanata.atlassian.net/browse/ZNTA-928) - Readonly project doesn't have "lock" icon in UI
+* [ZNTA-793](https://zanata.atlassian.net/browse/ZNTA-793) - Remove unused method in TranslationMemoryAction
+* [ZNTA-54](https://zanata.atlassian.net/browse/ZNTA-54) - Allow delete language
+
+<h5>Infrastructure Changes</h5>
+* Recommended platform: JBoss EAP 6 (6.4.6.GA or later).
+* Alternative platform: WildFly version 10.x.
+
+-----------------------
+## 3.8.4
+<h5>Bug fixes</h5>
+* [ZNTA-959](https://zanata.atlassian.net/browse/ZNTA-959) - Copy version fails silently and leaves version readonly
+* [ZNTA-1013](https://zanata.atlassian.net/browse/ZNTA-1013) - Fix Merge translation exception
+
+## 3.8.3
+<h5>Bug fixes</h5>
+* [ZNTA-953](https://zanata.atlassian.net/browse/ZNTA-953) - Fix delete version
+
+## 3.8.2
+<h5>Bug fixes</h5>
+* [ZNTA-854](https://zanata.atlassian.net/browse/ZNTA-854) - Fast scrolling(infinite scroll) in glossary table not loading data
+
+## 3.8.1
+<h5>Bug fixes</h5>
+* [ZNTA-844](https://zanata.atlassian.net/browse/ZNTA-844) - Merge Translations dialog broken
+
+
+## 3.8.0
+<h5>Infrastructure Changes</h5>
+* In wildfly or EAP standalone.xml, change all occurrences of "org.jboss.seam.security.jaas.SeamLoginModule" to "org.zanata.security.jaas.InternalLoginModule"
+* Zanata now requires JBoss EAP 6.4.2.GA or later (recommended), or WildFly version 9.x.
+* Zanata now requires a Java 1.8 virtual machine.
+
+
+<h5>Bug fixes</h5>
 * [1235070](https://bugzilla.redhat.com/show_bug.cgi?id=1235070) - Copied translations (using copy trans) should not be taken into account as contributions in the stats
 * [1004620](https://bugzilla.redhat.com/show_bug.cgi?id=1004620) - Import TM box should disable the Import button when no file specified
 * [1002386](https://bugzilla.redhat.com/show_bug.cgi?id=1002386) - Capitalised proper nouns in project type description
@@ -20,14 +76,58 @@ Zanata now requires JBoss EAP 6.4.2.GA or later (recommended), or WildFly versio
 * [1243688](https://bugzilla.redhat.com/show_bug.cgi?id=1243688) - Groups filter by archived not working
 * [ZNTA-615](https://zanata.atlassian.net/browse/ZNTA-615) - Fix glossary permission
 * [ZNTA-643](https://zanata.atlassian.net/browse/ZNTA-643) - Fix concurrent map modification issue in language page
-
+* [ZNTA-624](https://zanata.atlassian.net/browse/ZNTA-624) - Increase password length to 1024.
+* [ZNTA-9](https://zanata.atlassian.net/browse/ZNTA-9) - Account activation message not displaying
+* [ZNTA-696](https://zanata.atlassian.net/browse/ZNTA-696) - Fix user service for null authenticated user
+* [ZNTA-634](https://zanata.atlassian.net/browse/ZNTA-634) - Users being logged out after a short period of inactivity
+* [ZNTA-719](https://zanata.atlassian.net/browse/ZNTA-719) - Translation merge targets the wrong source version
+* [ZNTA-718](https://zanata.atlassian.net/browse/ZNTA-718) - Allow admin and project maintainer to merge translation from all active projects.
+* [ZNTA-639](https://zanata.atlassian.net/browse/ZNTA-639) - Expired sessions causing ViewExpiredExceptions
+* [ZNTA-720](https://zanata.atlassian.net/browse/ZNTA-720) - Redirect to login page after account activation
+* [ZNTA-767](https://zanata.atlassian.net/browse/ZNTA-767) - File names / paths with spaces cannot be navigated to via the Documents tab. **Note:** This will invalidate all existing bookmarked URL with selected document in the project version page.
+* [ZNTA-815](https://zanata.atlassian.net/browse/ZNTA-815) - New user login redirected to login screen again instead of Dashboard
+* [ZNTA-657](https://zanata.atlassian.net/browse/ZNTA-657) - Add new language uses the search text instead of the selected locale
+* [ZNTA-817](https://zanata.atlassian.net/browse/ZNTA-817) - Fix default terms of use url
+* [ZNTA-816](https://zanata.atlassian.net/browse/ZNTA-816) - No success/confirmation message after updating email via Settings->Profile
+* [ZNTA-811](https://zanata.atlassian.net/browse/ZNTA-811) - Downloaded translated .pot file has no extension
+* [ZNTA-726](https://zanata.atlassian.net/browse/ZNTA-726) - leading/trailing newline validation should not check the line numbers
+* [ZNTA-818](https://zanata.atlassian.net/browse/ZNTA-818) - 'SHOW' does not work while changing password in the Settings twice
+* [ZNTA-813](https://zanata.atlassian.net/browse/ZNTA-813) - Add tooltip for disabled account
+* [ZNTA-814](https://zanata.atlassian.net/browse/ZNTA-814) - handle enter key in inactive account page
+* [ZNTA-812](https://zanata.atlassian.net/browse/ZNTA-812) - Project text search and replace does bad html safe encoding on search text
 
 -----------------------
 
 <h5>New Features</h5>
-* [1224912] (https://bugzilla.redhat.com/show_bug.cgi?id=1224912) - Filter "Last modified by translators other than <user>"
+* [1224912](https://bugzilla.redhat.com/show_bug.cgi?id=1224912) - Filter "Last modified by translators other than &lt;user&gt;"
 * [1213630](https://bugzilla.redhat.com/show_bug.cgi?id=1213630) - Webhook header needs to include cryptographic signature in header for identification
 * [1214502](https://bugzilla.redhat.com/show_bug.cgi?id=1214502) -  RFE: Grant project creation permission to certain sets of users
+* [ZNTA-555](https://zanata.atlassian.net/browse/ZNTA-555) - Internal "user request management" and tracking
+* [1214502](https://bugzilla.redhat.com/show_bug.cgi?id=1214502) - RFE: Grant project creation permission to certain sets of users
+* [1233524](https://bugzilla.redhat.com/show_bug.cgi?id=1233524) - Update project search page to include user
+* [ZNTA-108](https://zanata.atlassian.net/browse/ZNTA-108) - Improved glossary management: add, edit and delete individual glossary entries
+
+-----------------------
+## 3.7.3
+
+<h5>Bug fixes</h5>
+* [ZNTA-686](https://zanata.atlassian.net/browse/ZNTA-686) - Editor filter by last modified date uses wrong date pattern to validate
+* [ZNTA-707](https://zanata.atlassian.net/browse/ZNTA-707) - mysql on Mac throws error migrating DB with indexname 'Idx_lastChanged' vs 'Idx_LastChanged'
+* [ZNTA-721](https://zanata.atlassian.net/browse/ZNTA-721) - Fuzzy/automatic TM search not finding good/exact matches
+
+## 3.7.2
+
+<h5>Improvements</h5>
+* [ZNTA-653](https://zanata.atlassian.net/browse/ZNTA-653) - Include MDC values in log emails
+* [ZNTA-665](https://zanata.atlassian.net/browse/ZNTA-665) - liquibase merge addColumn changes
+  It helps to reduce the database migration time.
+
+<h5>Bug fixes</h5>
+* [ZNTA-594](https://zanata.atlassian.net/browse/ZNTA-594) - Project-wide search and replace only shows 15 results per document
+* [ZNTA-615](https://zanata.atlassian.net/browse/ZNTA-615) - Glossarist/-admin not getting glossary-update permission
+* [ZNTA-643](https://zanata.atlassian.net/browse/ZNTA-643) - javax.servlet.ServletException: java.util.ConcurrentModificationException , Caused by: javax.faces.el.EvaluationException: java.util.ConcurrentModificationException
+
+-----------------------
 
 ## 3.7.1
 
@@ -50,11 +150,11 @@ Zanata now requires JBoss EAP 6.4.2.GA or later (recommended), or WildFly versio
             <property name="jboss.as.management.blocking.timeout" value="7200"/>
             ...
         </system-properties>
-      
-        
+
+
 * The Zanata administrator will also need to reindex HProject table via the Administration menu. See [Manage search](user-guide/admin/manage-search) for more information.
-    
-    
+
+
 <h5>Infrastructure Changes</h5>
 
 * Zanata now uses Infinispan as its cache provider, and the cache needs to be configured in Jboss' `standalone.xml` file. Please see the [Infinispan](user-guide/system-admin/configuration/infinispan) section for more information.
@@ -99,7 +199,7 @@ Example usage in html file: `<link rel="shortcut icon" href="#{assets['img/logo/
 * [1229940](https://bugzilla.redhat.com/show_bug.cgi?id=1229940) - When deleting a version or project remove links and replace icon from the activity feed
 * [1230424](https://bugzilla.redhat.com/show_bug.cgi?id=1230424) - Update message "Archived" to "Deleted" in activity table
 * [1231054](https://bugzilla.redhat.com/show_bug.cgi?id=1231054) - Exception when clicking "more activity" when there is no valid "editor url"
-* [1234687](https://bugzilla.redhat.com/show_bug.cgi?id=1234687) - [REGRESSION] can not upload pot file from web UI 
+* [1234687](https://bugzilla.redhat.com/show_bug.cgi?id=1234687) - [REGRESSION] can not upload pot file from web UI
 * [1235495](https://bugzilla.redhat.com/show_bug.cgi?id=1235495) - [REGRESSION] can not upload po file from web UI
 
 -----------------------
@@ -108,7 +208,7 @@ Example usage in html file: `<link rel="shortcut icon" href="#{assets['img/logo/
 * [1133989](https://bugzilla.redhat.com/show_bug.cgi?id=1133989) - Copy translations from existing version.
 * [1186972](https://bugzilla.redhat.com/show_bug.cgi?id=1186972) - Server-side file conversion and REST service.
     * File project type now supports XLIFF, PROPERTIES, PROPERTIES_UTF8, and GETTEXT
-* [1204982](https://bugzilla.redhat.com/show_bug.cgi?id=1204982) - Documentation update for zanata.org/help + readthedocs 
+* [1204982](https://bugzilla.redhat.com/show_bug.cgi?id=1204982) - Documentation update for zanata.org/help + readthedocs
 * [1209670](https://bugzilla.redhat.com/show_bug.cgi?id=1209670) - Improve review statistics - approved vs translated
 * [1211134](https://bugzilla.redhat.com/show_bug.cgi?id=1211134) - Review should be enabled in editor by default
 * [1198433](https://bugzilla.redhat.com/show_bug.cgi?id=1198433) - Replace Seam Text with CommonMark Markdown
@@ -181,7 +281,7 @@ The Zanata installer's configuration now enables "connection debugging" to preve
 
 The editor prototype can be accessed via the **(Try the new alpha editor)** button at the top of the regular editor.  It showcases the look and feel, workflow and intended direction of Zanata.
 
-As it is a _prototype_, there are bound to be some bugs and sub-optimal behaviours - any suggestions or reports can be forwarded to our [bug tracker](https://bugzilla.redhat.com/enter_bug.cgi?product=Zanata).
+As it is a _prototype_, there are bound to be some bugs and sub-optimal behaviours - any suggestions or reports can be forwarded to our [bug tracker](https://zanata.atlassian.net/).
 
 * [1150373](https://bugzilla.redhat.com/show_bug.cgi?id=1150373) - Keyboard shortcuts
 * [1172437](https://bugzilla.redhat.com/show_bug.cgi?id=1172437) - Add plurals to the new editor
@@ -932,4 +1032,3 @@ Zanata now requires JMS to be configured in standalone.xml in order to queue up 
 
 ## flies-1.0
 * initial release
-

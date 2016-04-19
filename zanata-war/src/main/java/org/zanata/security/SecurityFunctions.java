@@ -20,46 +20,122 @@
  */
 package org.zanata.security;
 
-import com.google.common.base.Optional;
-import org.jboss.seam.ScopeType;
-import org.zanata.seam.security.ZanataJpaIdentityStore;
+import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Session;
 import org.zanata.dao.PersonDAO;
+import org.zanata.dao.ProjectLocaleMemberDAO;
+import org.zanata.dao.ProjectMemberDAO;
 import org.zanata.model.HAccount;
 import org.zanata.model.HAccountRole;
 import org.zanata.model.HIterationGroup;
 import org.zanata.model.HLocale;
 import org.zanata.model.HLocaleMember;
+import org.zanata.model.HPerson;
 import org.zanata.model.HProject;
 import org.zanata.model.HProjectIteration;
+import org.zanata.model.LocaleRole;
+import org.zanata.model.ProjectRole;
+import org.zanata.security.annotations.Authenticated;
 import org.zanata.security.permission.GrantsPermission;
+import org.zanata.security.permission.PermissionProvider;
 import org.zanata.util.HttpUtil;
 import org.zanata.util.ServiceLocator;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 
-import lombok.extern.slf4j.Slf4j;
+import java.util.Optional;
+
+import static org.zanata.model.ProjectRole.Maintainer;
+import static org.zanata.model.ProjectRole.TranslationMaintainer;
 
 /**
- * Contains static helper functions used inside the rules files.
+ * Contains static security rules functions used to determine permissions.
+ *
+ * <b>NOTE</b>:
+ * If you intended to use DAO and execute query in security functions, please
+ * make sure you use a new session to execute the query. The reason being, if
+ * you update an entity, SmartEntitySecurityListener will perform a check at
+ * pre-update. Any query executed within the same session will trigger a flush,
+ * which triggers another SmartEntitySecurityListener check and this will run
+ * into a loop.
+ *
  *
  * @author Carlos Munoz <a
  *         href="mailto:camunoz@redhat.com">camunoz@redhat.com</a>
  */
 @Slf4j
-public class SecurityFunctions {
-    protected SecurityFunctions() {
-    }
+public class SecurityFunctions extends PermissionProvider {
+
+    @Inject
+    private ZanataIdentity identity;
+
+    @Inject
+    @Authenticated
+    private Optional<HAccount> authenticatedAccount;
 
     /* admin can do anything */
     @GrantsPermission
-    public static boolean isAdmin() {
-        return getIdentity().hasRole("admin");
+    public boolean isAdmin() {
+        return identity.hasRole("admin");
     }
 
-    public static boolean isProjectMaintainer(HProject project) {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent() && account.get().getPerson().isMaintainer(project);
+    public boolean isLoggedIn() {
+        return authenticatedAccount.isPresent();
+    }
+
+    public boolean isProjectMaintainer(HProject project) {
+        return isProjectRole(project, Maintainer);
+    }
+
+    public boolean isProjectTranslationMaintainer(HProject project) {
+        return isProjectRole(project, TranslationMaintainer);
+    }
+
+    /* Check whether the authenticated person has the given role in the given
+     * project.
+     */
+    private boolean isProjectRole(HProject project, ProjectRole role) {
+        if (isLoggedIn()) {
+            HPerson person = authenticatedAccount.get().getPerson();
+
+            // see class level javadoc for why we need a new session here
+            try (AutoCloseSession autoCloseSession = newSession()) {
+                ProjectMemberDAO projectMemberDAO =
+                        new ProjectMemberDAO(autoCloseSession.session);
+                return projectMemberDAO
+                        .hasProjectRole(person, project, role);
+            }
+        }
+
+        // No authenticated user
+        return false;
+    }
+
+    /**
+     *
+     * @return a new AutoClosable wrapper of a NEW session
+     */
+    private static AutoCloseSession newSession() {
+        Session session =
+                (Session) ServiceLocator.instance().getEntityManagerFactory()
+                        .createEntityManager().getDelegate();
+        return new AutoCloseSession(session);
+    }
+
+    private boolean userHasProjectLanguageRole(HProject project,
+            HLocale lang,
+            LocaleRole role) {
+
+        if (isLoggedIn()) {
+            HPerson person = authenticatedAccount.get().getPerson();
+            return ServiceLocator.instance().getInstance(ProjectLocaleMemberDAO.class)
+                    .hasProjectLocaleRole(person, project, lang, role);
+        }
+
+        // No authenticated user
+        return false;
     }
 
     /***************************************************************************
@@ -67,17 +143,17 @@ public class SecurityFunctions {
      **************************************************************************/
 
     @GrantsPermission(actions = "create")
-    public static boolean canCreateAccount(String target) {
+    public boolean canCreateAccount(String target) {
         return target.equals("seam.account") && isAdmin();
     }
 
     @GrantsPermission
-    public static boolean canManageUsers(String target) {
+    public boolean canManageUsers(String target) {
         return target.equals("seam.user") && isAdmin();
     }
 
     @GrantsPermission
-    public static boolean canManageRoles(String target) {
+    public boolean canManageRoles(String target) {
         return target.equals("seam.role") && isAdmin();
     }
 
@@ -87,8 +163,8 @@ public class SecurityFunctions {
 
     /* 'project-creator' can create project */
     @GrantsPermission(actions = "insert")
-    public static boolean canCreateProject(HProject target) {
-        return getIdentity().hasRole("project-creator");
+    public boolean canCreateProject(HProject target) {
+        return identity.hasRole("project-creator");
     }
 
     /* anyone can read a project */
@@ -114,8 +190,8 @@ public class SecurityFunctions {
      */
     @GrantsPermission(actions = { "update",
             "add-iteration" })
-    public static boolean canUpdateProjectOrAddIteration(HProject project) {
-        if (!getIdentity().isLoggedIn()) {
+    public boolean canUpdateProjectOrAddIteration(HProject project) {
+        if (!identity.isLoggedIn()) {
             return false;
         }
 
@@ -128,27 +204,53 @@ public class SecurityFunctions {
      */
     @GrantsPermission(actions = {
             "insert", "update", "import-template" })
-    public static boolean canInsertOrUpdateProjectIteration(
+    public boolean canInsertOrUpdateProjectIteration(
             HProjectIteration iteration) {
         return isProjectMaintainer(iteration.getProject());
+    }
+
+    @GrantsPermission(actions = "merge-trans")
+    public boolean canMergeTrans(HProject project) {
+        return isAdmin() || isProjectMaintainer(project);
+    }
+
+    /***************************************************************************
+     * Project team management rules
+     **************************************************************************/
+
+    /* Maintainer can manage all project roles */
+    @GrantsPermission(actions = {"manage-members"})
+    public boolean canManageProjectMembers(HProject project) {
+        return identity.isLoggedIn() && isProjectMaintainer(project);
+    }
+
+    /* Translation Maintainer can manage project translation team */
+    @GrantsPermission(actions = {"manage-translation-members"})
+    public boolean canManageProjectTranslationMembers(HProject project) {
+        // TODO add a DAO check for multiple project roles at once (single query
+        // instead of two)
+        return identity.isLoggedIn() &&
+                (isProjectTranslationMaintainer(project) ||
+                isProjectMaintainer(project));
     }
 
     /***************************************************************************
      * Translation rules
      **************************************************************************/
 
-    /* Language Team members can add a translation for their language teams */
+    /* Global Language Team members can add a translation for their language
+     * teams, unless global translation is restricted. */
     @GrantsPermission(actions = { "add-translation", "modify-translation" })
-    public static boolean canTranslate(HProject project, HLocale lang) {
-        return isUserAllowedAccess(project) && isUserTranslatorOfLanguage(lang);
+    public boolean canTranslate(HProject project, HLocale lang) {
+        return project.isAllowGlobalTranslation() &&
+                isUserAllowedAccess(project) && isUserTranslatorOfLanguage(lang);
     }
 
-    public static boolean isUserTranslatorOfLanguage(HLocale lang) {
-        Optional<HAccount> authenticatedAccount = getAuthenticatedAccount();
+    public boolean isUserTranslatorOfLanguage(HLocale lang) {
         PersonDAO personDAO =
                 ServiceLocator.instance().getInstance(PersonDAO.class);
 
-        if (authenticatedAccount.isPresent()) {
+        if (isLoggedIn()) {
             return personDAO.isUserInLanguageTeamWithRoles(
                     authenticatedAccount.get().getPerson(), lang, true, null, null);
         }
@@ -156,10 +258,8 @@ public class SecurityFunctions {
         return false; // No authenticated user
     }
 
-    public static boolean isUserAllowedAccess(HProject project) {
+    public boolean isUserAllowedAccess(HProject project) {
         if (project.isRestrictedByRoles()) {
-            ZanataIdentity identity = getIdentity();
-
             for (HAccountRole role : project.getAllowedRoles()) {
                 if (identity.hasRole(role.getName())) {
                     return true;
@@ -173,24 +273,34 @@ public class SecurityFunctions {
         }
     }
 
+    /* Project Language Translators can add a translation for their language
+     * regardless of global translation setting.
+     */
+    @GrantsPermission(actions = { "add-translation", "modify-translation" })
+    public boolean projectTranslatorCanTranslate(HProject project, HLocale lang) {
+        return isLoggedIn() &&
+                userHasProjectLanguageRole(project, lang, LocaleRole.Translator);
+    }
+
     /***************************************************************************
      * Review translation rules
      **************************************************************************/
-    /* Language Team reviewer can approve/reject translation */
+    /* Global Language Team reviewer can approve/reject translation, unless
+     * global translation is restricted. */
     // TODO Unify these two permission actions into a single one
     @GrantsPermission(
             actions = { "review-translation", "translation-review" })
-    public static boolean
+    public boolean
             canReviewTranslation(HProject project, HLocale locale) {
-        return isUserAllowedAccess(project) && isUserReviewerOfLanguage(locale);
+        return project.isAllowGlobalTranslation() &&
+                isUserAllowedAccess(project) && isUserReviewerOfLanguage(locale);
     }
 
-    public static boolean isUserReviewerOfLanguage(HLocale lang) {
-        Optional<HAccount> authenticatedAccount = getAuthenticatedAccount();
+    public boolean isUserReviewerOfLanguage(HLocale lang) {
         PersonDAO personDAO =
                 ServiceLocator.instance().getInstance(PersonDAO.class);
 
-        if (authenticatedAccount.isPresent()) {
+        if (isLoggedIn()) {
             return personDAO.isUserInLanguageTeamWithRoles(
                     authenticatedAccount.get().getPerson(), lang, null, true, null);
         } else {
@@ -205,26 +315,54 @@ public class SecurityFunctions {
      */
     @GrantsPermission(actions = { "add-translation", "modify-translation",
             "review-translation", "translation-review" })
-    public static boolean canAddOrReviewTranslation(
+    public boolean canAddOrReviewTranslation(
             HProject project, HLocale locale) {
-        Optional<HAccount> authenticatedAccount = getAuthenticatedAccount();
-        return authenticatedAccount.isPresent() && isProjectMaintainer(project);
+        return isLoggedIn() && isProjectMaintainer(project);
+    }
+
+    /* Project Translation Maintainers can add, modify or review a translation
+     * for their projects.
+     */
+    @GrantsPermission(actions = { "add-translation", "modify-translation",
+            "review-translation", "translation-review" })
+    public boolean translationMaintainerCanTranslate(HProject project,
+                                                            HLocale locale) {
+        return isLoggedIn() && isProjectTranslationMaintainer(
+                project);
+    }
+
+    /* Project Translation Reviewer can perform translation and review for their
+     * language in the project, regardless of global translation permission.
+     */
+    @GrantsPermission(actions = { "add-translation", "modify-translation",
+            "review-translation", "translation-review" })
+    public boolean projectReviewerCanTranslateAndReview(HProject project, HLocale lang) {
+        return isLoggedIn() &&
+                userHasProjectLanguageRole(project, lang, LocaleRole.Reviewer);
     }
 
     /* Project Maintainer can import translation (merge type is IMPORT) */
     @GrantsPermission(actions = "import-translation")
-    public static boolean canImportTranslation(
+    public boolean canImportTranslation(
             HProjectIteration projectIteration) {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent() && account.get().getPerson().isMaintainer(projectIteration.getProject());
+        return isLoggedIn()
+                && isProjectMaintainer(projectIteration.getProject());
     }
 
-    public static boolean isLanguageTeamMember(HLocale lang) {
-        Optional<HAccount> authenticatedAccount = getAuthenticatedAccount();
+    /* Project Translation Maintainer can import translation (merge type is IMPORT) */
+    @GrantsPermission(actions = "import-translation")
+    public boolean translationMaintainerCanImportTranslation(
+            HProjectIteration projectIteration) {
+        return isLoggedIn()
+                && isProjectTranslationMaintainer(projectIteration.getProject());
+    }
+
+    /* Membership in global language teams. */
+    public boolean isLanguageTeamMember(HLocale lang) {
         PersonDAO personDAO =
                 ServiceLocator.instance().getInstance(PersonDAO.class);
 
-        if (authenticatedAccount.isPresent()) {
+        if (isLoggedIn()) {
             return personDAO.isUserInLanguageTeamWithRoles(
                     authenticatedAccount.get().getPerson(), lang, null, null, null);
         } else {
@@ -239,15 +377,15 @@ public class SecurityFunctions {
 
     /* 'glossarist' can push and update glossaries */
     @GrantsPermission(actions = { "glossary-insert", "glossary-update" })
-    public static boolean canPushGlossary() {
-        return getIdentity().hasRole("glossarist");
+    public boolean canPushGlossary() {
+        return identity.hasRole("glossarist");
     }
 
     /* 'glossarist-admin' can also delete */
     @GrantsPermission(actions = { "glossary-insert", "glossary-update",
             "glossary-delete" })
-    public static boolean canAdminGlossary() {
-        return getIdentity().hasRole("glossary-admin");
+    public boolean canAdminGlossary() {
+        return identity.hasRole("glossary-admin");
     }
 
     /***************************************************************************
@@ -262,12 +400,11 @@ public class SecurityFunctions {
 
     /* 'team coordinator' can manage language teams */
     @GrantsPermission(actions = "manage-language-team")
-    public static boolean isUserCoordinatorOfLanguage(HLocale lang) {
-        Optional<HAccount> authenticatedAccount = getAuthenticatedAccount();
+    public boolean isUserCoordinatorOfLanguage(HLocale lang) {
         PersonDAO personDAO =
                 ServiceLocator.instance().getInstance(PersonDAO.class);
 
-        if (authenticatedAccount.isPresent()) {
+        if (isLoggedIn()) {
             return personDAO.isUserInLanguageTeamWithRoles(
                     authenticatedAccount.get().getPerson(), lang, null, null, true);
         } else {
@@ -278,7 +415,7 @@ public class SecurityFunctions {
 
     /* 'team coordinator' can insert/update/delete language team members */
     @GrantsPermission(actions = { "insert", "update", "delete" })
-    public static boolean canModifyLanguageTeamMembers(
+    public boolean canModifyLanguageTeamMembers(
             HLocaleMember localeMember) {
         return isUserCoordinatorOfLanguage(localeMember.getSupportedLanguage());
     }
@@ -289,15 +426,15 @@ public class SecurityFunctions {
 
     // Only admin can view obsolete projects
     @GrantsPermission(actions = "view-obsolete")
-    public static boolean canViewObsoleteProject(HProject project) {
-        return getIdentity().hasRole("admin");
+    public boolean canViewObsoleteProject(HProject project) {
+        return identity.hasRole("admin");
     }
 
     // Only admin can view obsolete project iterations
     @GrantsPermission(actions = "view-obsolete")
-    public static boolean canViewObsoleteProjectIteration(
+    public boolean canViewObsoleteProjectIteration(
             HProjectIteration projectIteration) {
-        return getIdentity().hasRole("admin");
+        return identity.hasRole("admin");
     }
 
     /***************************************************************************
@@ -306,13 +443,13 @@ public class SecurityFunctions {
 
     // Project maintainer can archive/delete projects
     @GrantsPermission(actions = "mark-obsolete")
-    public static boolean canArchiveProject(HProject project) {
+    public boolean canArchiveProject(HProject project) {
         return isProjectMaintainer(project);
     }
 
     // Project maintainer can archive/delete project iterations
     @GrantsPermission(actions = "mark-obsolete")
-    public static boolean canArchiveProjectIteration(
+    public boolean canArchiveProjectIteration(
             HProjectIteration projectIteration) {
         return isProjectMaintainer(projectIteration.getProject());
     }
@@ -326,26 +463,26 @@ public class SecurityFunctions {
      * download files
      */
     @GrantsPermission(actions = { "download-single", "download-all" })
-    public static boolean canDownloadFiles(HProjectIteration projectIteration) {
-        return getIdentity().isLoggedIn();
+    public boolean canDownloadFiles(HProjectIteration projectIteration) {
+        return identity.isLoggedIn();
     }
 
     /***************************************************************************
      * Version Group rules
      **************************************************************************/
     @GrantsPermission(actions = "update")
-    public static boolean canUpdateVersionGroup(HIterationGroup group) {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent() && account.get().getPerson().isMaintainer(group);
+    public boolean canUpdateVersionGroup(HIterationGroup group) {
+        return isLoggedIn()
+                && authenticatedAccount.get().getPerson().isMaintainer(group);
     }
 
     @GrantsPermission(actions = "insert")
-    public static boolean canInsertVersionGroup(HIterationGroup group) {
+    public boolean canInsertVersionGroup(HIterationGroup group) {
         return isAdmin();
     }
 
     @GrantsPermission(actions = "view-obsolete")
-    public static boolean canViewObsoleteVersionGroup(HIterationGroup group) {
+    public boolean canViewObsoleteVersionGroup(HIterationGroup group) {
         return isAdmin();
     }
 
@@ -355,9 +492,9 @@ public class SecurityFunctions {
 
     /** Admins and Project maintainers can perform copy-trans */
     @GrantsPermission(actions = "copy-trans")
-    public static boolean canRunCopyTrans(HProjectIteration iteration) {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent() && account.get().getPerson().isMaintainer(iteration.getProject());
+    public boolean canRunCopyTrans(HProjectIteration iteration) {
+        return isLoggedIn()
+                && isProjectMaintainer(iteration.getProject());
     }
 
     /*****************************************************************************************
@@ -365,34 +502,36 @@ public class SecurityFunctions {
      ******************************************************************************************/
 
     @GrantsPermission(actions = "review-comment")
-    public static boolean canCommentOnReview(HLocale locale, HProject project) {
-        return isUserAllowedAccess(project) && isLanguageTeamMember(locale);
+    public boolean canCommentOnReview(HLocale locale, HProject project) {
+        return project.isAllowGlobalTranslation() &&
+                isUserAllowedAccess(project) && isLanguageTeamMember(locale);
     }
 
     @GrantsPermission(actions = "review-comment")
-    public static boolean canMaintainerCommentOnReview(HLocale locale,
+    public boolean canMaintainerCommentOnReview(HLocale locale,
             HProject project) {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent() && account.get().getPerson().isMaintainer(project);
+        return isLoggedIn() && isProjectMaintainer(project);
     }
 
-    private static final ZanataIdentity getIdentity() {
-        return ServiceLocator.instance().getInstance(ZanataIdentity.class);
+    @GrantsPermission(actions = "review-comment")
+    public boolean canTranslationMaintainerCommentOnReview(HLocale locale,
+            HProject project) {
+        return isLoggedIn()
+                && isProjectTranslationMaintainer(project);
     }
 
-    private static final Optional<HAccount> getAuthenticatedAccount() {
-        return Optional.fromNullable(ServiceLocator.instance().getInstance(
-                ZanataJpaIdentityStore.AUTHENTICATED_USER, HAccount.class));
+    @GrantsPermission(actions = "review-comment")
+    public boolean canReviewerCommentOnReview(HLocale locale,
+            HProject project) {
+        return isLoggedIn() &&
+                userHasProjectLanguageRole(project, locale, LocaleRole.Reviewer);
     }
 
-    private static final <T> T extractTarget(Object[] array, Class<T> type) {
-        for (int i = 0; i < array.length; i++) {
-            Object arrayElement = array[i];
-            if (type.isAssignableFrom(arrayElement.getClass())) {
-                return (T) arrayElement;
-            }
-        }
-        return null;
+    @GrantsPermission(actions = "review-comment")
+    public boolean canTranslatorCommentOnReview(HLocale locale,
+            HProject project) {
+        return isLoggedIn() &&
+                userHasProjectLanguageRole(project, locale, LocaleRole.Translator);
     }
 
     /*****************************************************************************************
@@ -400,9 +539,8 @@ public class SecurityFunctions {
      ******************************************************************************************/
 
     @GrantsPermission(actions = "download-tmx")
-    public static boolean canDownloadTMX() {
-        Optional<HAccount> account = getAuthenticatedAccount();
-        return account.isPresent();
+    public boolean canDownloadTMX() {
+        return isLoggedIn();
     }
 
 
@@ -463,6 +601,24 @@ public class SecurityFunctions {
      *                        See annotation @Path in REST service class.
      */
     private static boolean isTestServicePath(String servicePath) {
-        return servicePath != null && servicePath.startsWith("/test");
+        return servicePath != null
+                && (
+                // when being called in RestLimitingFilter
+                servicePath.contains("/rest/test/") ||
+                        // when being called in ZanataRestSecurityInterceptor
+                servicePath.startsWith("/test")
+        );
+    }
+
+    private static class AutoCloseSession implements AutoCloseable {
+        private final Session session;
+
+        private AutoCloseSession(Session session) {
+            this.session = session;
+        }
+
+        public void close() {
+            session.close();
+        }
     }
 }

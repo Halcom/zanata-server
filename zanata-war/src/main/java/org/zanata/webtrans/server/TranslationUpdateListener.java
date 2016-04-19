@@ -1,19 +1,21 @@
 package org.zanata.webtrans.server;
 
+import static org.zanata.transaction.TransactionUtil.runInTransaction;
+
 import java.util.concurrent.TimeUnit;
+
+import javax.enterprise.event.Observes;
+
+import lombok.EqualsAndHashCode;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.hibernate.event.spi.PostInsertEvent;
 import org.hibernate.event.spi.PostInsertEventListener;
 import org.hibernate.event.spi.PostUpdateEvent;
 import org.hibernate.event.spi.PostUpdateEventListener;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.AutoCreate;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Observer;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.util.Work;
-import org.jboss.seam.web.ServletContexts;
+import javax.inject.Inject;
+import javax.inject.Named;
 import org.zanata.common.ContentState;
 import org.zanata.common.LocaleId;
 import org.zanata.common.ProjectType;
@@ -23,8 +25,10 @@ import org.zanata.model.HDocument;
 import org.zanata.model.HProjectIteration;
 import org.zanata.model.HTextFlow;
 import org.zanata.model.HTextFlowTarget;
-import org.zanata.util.Event;
-import org.zanata.util.ServiceLocator;
+import javax.enterprise.event.Event;
+
+import org.zanata.servlet.HttpRequestAndSessionHolder;
+import org.zanata.util.IServiceLocator;
 import org.zanata.webtrans.server.rpc.TransUnitTransformer;
 import org.zanata.webtrans.shared.auth.EditorClientId;
 import org.zanata.webtrans.shared.model.DocumentId;
@@ -42,21 +46,16 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
-import lombok.EqualsAndHashCode;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import javax.enterprise.event.Observes;
-
+import javax.servlet.http.HttpSession;
 /**
  * Entity event listener for HTextFlowTarget.
  *
  * @author Patrick Huang <a
  *         href="mailto:pahuang@redhat.com">pahuang@redhat.com</a>
  */
-@Name("translationUpdateListener")
-@Scope(ScopeType.APPLICATION)
-@AutoCreate
+@Named("translationUpdateListener")
+@javax.enterprise.context.ApplicationScoped
+
 @Slf4j
 public class TranslationUpdateListener implements PostUpdateEventListener,
         PostInsertEventListener {
@@ -68,13 +67,13 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
                     .expireAfterAccess(1, TimeUnit.SECONDS).maximumSize(1000)
                     .build();
 
-    @In(create = true)
+    @Inject
     private TranslationWorkspaceManager translationWorkspaceManager;
 
-    @In
-    private ServiceLocator serviceLocator;
+    @Inject
+    private IServiceLocator serviceLocator;
 
-    @In("event")
+    @Inject
     private Event<TextFlowTargetUpdatedEvent>
             textFlowTargetUpdatedEvent;
 
@@ -84,7 +83,6 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
      *
      * @param event
      */
-    @Observer(TextFlowTargetUpdateContextEvent.EVENT_NAME)
     public static void updateContext(@Observes TextFlowTargetUpdateContextEvent event) {
         updateContext
                 .put(new CacheKey(event.getTransUnitId(), event.getLocaleId()),
@@ -101,20 +99,16 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
         final HTextFlowTarget target =
                 HTextFlowTarget.class.cast(event.getEntity());
         try {
-            new Work<Void>() {
-                @Override
-                protected Void work() throws Exception {
-                    ContentState oldContentState =
-                            (ContentState) Iterables.find(
-                                    Lists.newArrayList(event.getOldState()),
-                                    Predicates.instanceOf(ContentState.class));
+            runInTransaction(() -> {
+                ContentState oldContentState =
+                        (ContentState) Iterables.find(
+                                Lists.newArrayList(event.getOldState()),
+                                Predicates.instanceOf(ContentState.class));
 
 
-                    prepareTransUnitUpdatedEvent(target.getVersionNum() - 1,
-                            oldContentState, target);
-                    return null;
-                }
-            }.workInTransaction();
+                prepareTransUnitUpdatedEvent(target.getVersionNum() - 1,
+                        oldContentState, target);
+            });
         } catch (Exception e) {
             log.error("fail to publish TransUnitUpdate event", e);
         }
@@ -158,16 +152,15 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
                 updateContext.getIfPresent(new CacheKey(transUnit.getId(),
                         transUnit.getLocaleId()));
         TransUnitUpdated updated;
+        java.util.Optional<HttpSession> sessionOpt =
+                HttpRequestAndSessionHolder.getHttpSession(false);
         if (context != null) {
             updated =
                     new TransUnitUpdated(updateInfo, context.editorClientId,
                             context.updateType);
             log.debug("about to publish trans unit updated event {}", updated);
-        } else if (ServletContexts.instance().getRequest() != null) {
-
-            String sessionId =
-                    ServletContexts.instance().getRequest().getSession()
-                            .getId();
+        } else if (sessionOpt.isPresent()) {
+            String sessionId = sessionOpt.get().getId();
             EditorClientId editorClientId = new EditorClientId(sessionId, -1);
             updated =
                     new TransUnitUpdated(updateInfo, editorClientId,
@@ -178,7 +171,7 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
                             "unknown", -1),
                             TransUnitUpdated.UpdateType.NonEditorSave);
         }
-        textFlowTargetUpdatedEvent.fireAfterSuccess(
+        textFlowTargetUpdatedEvent.fire(
                 new TextFlowTargetUpdatedEvent(workspaceOptional.get(),
                         target.getId(), updated));
     }
@@ -199,15 +192,8 @@ public class TranslationUpdateListener implements PostUpdateEventListener,
         final HTextFlowTarget target =
                 HTextFlowTarget.class.cast(event.getEntity());
         try {
-            new Work<Void>() {
-
-                @Override
-                protected Void work() throws Exception {
-
-                    prepareTransUnitUpdatedEvent(0, ContentState.New, target);
-                    return null;
-                }
-            }.workInTransaction();
+            runInTransaction(() -> prepareTransUnitUpdatedEvent(0,
+                    ContentState.New, target));
         } catch (Exception e) {
             log.error("fail to publish TransUnitUpdate event", e);
         }

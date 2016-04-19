@@ -21,25 +21,20 @@
 
 package org.zanata.feature.project;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-
 import org.assertj.core.api.Assertions;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Ignore;
-import org.junit.Rule;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.zanata.feature.Feature;
 import org.zanata.feature.testharness.TestPlan.DetailedTest;
 import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.page.projects.projectsettings.ProjectLanguagesTab;
-import org.zanata.util.AddUsersRule;
-import org.zanata.util.SampleProjectRule;
 import org.zanata.workflow.LoginWorkFlow;
 import org.zanata.workflow.ProjectWorkFlow;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Damian Jansen
@@ -48,14 +43,8 @@ import org.zanata.workflow.ProjectWorkFlow;
 @Category(DetailedTest.class)
 public class EditProjectLanguagesTest extends ZanataTestCase {
 
-    @ClassRule
-    public static AddUsersRule addUsersRule = new AddUsersRule();
-
-    @Rule
-    public SampleProjectRule sampleProjectRule = new SampleProjectRule();
-
-    @BeforeClass
-    public static void beforeClass() {
+    @Before
+    public void before() {
         assertThat(new LoginWorkFlow().signIn("admin", "admin").loggedInAs())
                 .isEqualTo("admin")
                 .as("Admin is logged in");
@@ -97,17 +86,24 @@ public class EditProjectLanguagesTest extends ZanataTestCase {
                 .doesNotContain("pl")
                 .as("The enabled list does not contain 'US English' or Polish");
 
-        enabledLocaleList = projectLanguagesTab
+        projectLanguagesTab = projectLanguagesTab
                 .gotoSettingsTab()
                 .gotoSettingsLanguagesTab()
-                .enterSearchLanguage("en-US")
+                .filterDisabledLanguages("nonexistentLocale")
+                .expectAvailableLocaleListCount(0)
+                .filterDisabledLanguages("en-US")
+                .expectAvailableLocaleListCount(1);
+        projectLanguagesTab = projectLanguagesTab
                 .addLanguage("en-US")
-                .expectEnabledLocaleListCount(3)
+                .expectEnabledLocaleListCount(3);
+        enabledLocaleList = projectLanguagesTab
                 .getEnabledLocaleList();
 
         Assertions.assertThat(enabledLocaleList)
                 .contains("en-US", "fr", "hi")
                 .as("The enabled language list contains en-US, fr and hi");
+        projectLanguagesTab.filterEnabledLanguages("en-US")
+                .expectEnabledLocaleListCount(1);
     }
 
     @Feature(summary = "The administrator can set an alias for a project " +

@@ -8,6 +8,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.zanata.model.HAccount;
+import org.zanata.rest.dto.User;
 import org.zanata.rest.editor.MediaTypes;
 
 /**
@@ -52,3 +54,4 @@ public interface UserResource {
     @Path("/{username:[a-z\\d_]{3,20}}")
     public Response getUserInfo(@PathParam("username") String username);
 }
+

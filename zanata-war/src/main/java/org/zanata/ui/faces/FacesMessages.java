@@ -22,51 +22,65 @@ package org.zanata.ui.faces;
 
 import static javax.faces.application.FacesMessage.SEVERITY_INFO;
 import static javax.faces.application.FacesMessage.Severity;
-import static org.jboss.seam.annotations.Install.APPLICATION;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Stack;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import javax.faces.application.FacesMessage;
 import javax.faces.component.UIComponent;
 import javax.faces.context.FacesContext;
 
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.AutoCreate;
-import org.jboss.seam.annotations.Install;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.annotations.intercept.BypassInterceptors;
-import org.jboss.seam.core.Interpolator;
+import javax.inject.Inject;
+import javax.inject.Named;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.deltaspike.core.spi.scope.window.WindowContext;
 import org.zanata.i18n.Messages;
 import org.zanata.util.ServiceLocator;
 
 /**
  * Utility to allow for easy handling of JSF messages. Serves as a replacement
- * for the old Seam 2 {@link org.jboss.seam.faces.FacesMessages} class.
+ * for the old Seam 2 org.jboss.seam.faces.FacesMessages class.
  *
  * @author Carlos Munoz <a
  *         href="mailto:camunoz@redhat.com">camunoz@redhat.com</a>
  */
-@Scope(ScopeType.CONVERSATION)
-@Name("jsfMessages")
-@Install(precedence = APPLICATION,
-        classDependencies = "javax.faces.context.FacesContext")
-@AutoCreate
-@BypassInterceptors
-public class FacesMessages {
+@org.apache.deltaspike.core.api.scope.WindowScoped /* TODO [CDI] check this: migrated from ScopeType.CONVERSATION */
+@Named("jsfMessages")
+@Slf4j
+public class FacesMessages implements Serializable {
 
     private final List<FacesMessage> globalMessages = new ArrayList<>();
     private final Map<String, List<FacesMessage>> keyedMessages =
             new HashMap<>();
 
+    @Inject
+    private WindowContext windowContext;
+
+    @PostConstruct
+    void postConstruct() {
+        log.debug("{}: postConstruct", this);
+    }
+
+    @PreDestroy
+    void preDestroy() {
+        log.debug("{}: preDestroy", this);
+    }
+
     /**
      * Called to transfer messages from FacesMessages to JSF
      */
     public void beforeRenderResponse() {
+        log.debug("{}: beforeRenderResponse", this);
         for (FacesMessage message : globalMessages) {
             FacesContext.getCurrentInstance().addMessage(null,
                     message);
@@ -87,25 +101,38 @@ public class FacesMessages {
      */
     private String getClientId(String id) {
         FacesContext facesContext = FacesContext.getCurrentInstance();
-        return getClientId(facesContext.getViewRoot(), id, facesContext);
+
+        // we search from backwards, so for a component tree A->B->C, we search
+        // id from C then B then A for a match of id. If we found
+        // C.getId().equals(id), we will use C.getClientId()
+        Stack<UIComponent> uiComponentStack = new Stack<>();
+        addComponentToStack(uiComponentStack, facesContext.getViewRoot());
+
+        while (!uiComponentStack.empty()) {
+            UIComponent pop = uiComponentStack.pop();
+            if (pop.getId() != null && id.equals(pop.getId())) {
+                return pop.getClientId();
+            }
+        }
+        return null;
     }
 
-    private static String getClientId(UIComponent component, String id,
-            FacesContext facesContext) {
-        String componentId = component.getId();
-        if (componentId != null && componentId.equals(id)) {
-            return component.getClientId(facesContext);
-        } else {
-            Iterator iter = component.getFacetsAndChildren();
-            while (iter.hasNext()) {
-                UIComponent child = (UIComponent) iter.next();
-                String clientId = getClientId(child, id, facesContext);
-                if (clientId != null)
-                    return clientId;
-            }
-            return null;
+    private void addComponentToStack(Stack<UIComponent> uiComponentStack,
+            UIComponent component) {
+        uiComponentStack.push(component);
+        Iterator<UIComponent> iter = component.getFacetsAndChildren();
+
+        Queue<UIComponent> children = new LinkedList<>();
+        while (iter.hasNext()) {
+            UIComponent next = iter.next();
+            uiComponentStack.push(next);
+            children.add(next);
+        }
+        for (UIComponent child : children) {
+            addComponentToStack(uiComponentStack, child);
         }
     }
+
 
     /**
      * Add a status message, looking up the message in the resource bundle using
@@ -120,9 +147,14 @@ public class FacesMessages {
      */
     void addToControl(String id, Severity severity, String key,
             String messageTemplate, final Object... params) {
+        log.debug("{}: addToControl(id={}, template={})", this, id, messageTemplate);
+
         // NB This needs to change when migrating out of Seam
         String interpolatedMessage =
-                Interpolator.instance().interpolate(messageTemplate, params);
+                String.format(messageTemplate, params);
+
+        log.info("message to user (wid: {}): {})", windowContext.getCurrentWindowId(), interpolatedMessage);
+
         FacesMessage jsfMssg =
                 new FacesMessage(severity, interpolatedMessage, null);
 
@@ -174,6 +206,11 @@ public class FacesMessages {
         addToControl(null, severity, null, messageTemplate, params);
     }
 
+    public void addGlobal(FacesMessage msg) {
+        log.info("FacesMessage to user (wid: {}): {})", windowContext.getCurrentWindowId(), msg.getSummary());
+        globalMessages.add(msg);
+    }
+
     /**
      * Adds a global message from the configured resource bundle.
      * @param severity Message severity.
@@ -184,7 +221,7 @@ public class FacesMessages {
             final Object... params) {
         Messages messages =
                 ServiceLocator.instance().getInstance(Messages.class);
-        String formatedMssg = messages.format(key, params);
+        String formatedMssg = messages.formatWithAnyArgs(key, params);
         addGlobal(severity, formatedMssg, params);
     }
 

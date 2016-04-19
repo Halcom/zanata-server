@@ -22,14 +22,12 @@
 package org.zanata.feature.projectversion;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.zanata.feature.Feature;
-import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.feature.testharness.TestPlan.DetailedTest;
+import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.page.projectversion.versionsettings.VersionLanguagesTab;
-import org.zanata.util.SampleProjectRule;
 import org.zanata.util.ZanataRestCaller;
 import org.zanata.workflow.LoginWorkFlow;
 import org.zanata.workflow.ProjectWorkFlow;
@@ -44,9 +42,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Category(DetailedTest.class)
 public class EditVersionLanguagesTest extends ZanataTestCase {
-
-    @Rule
-    public SampleProjectRule sampleProjectRule = new SampleProjectRule();
 
     private ZanataRestCaller zanataRestCaller;
 
@@ -85,7 +80,10 @@ public class EditVersionLanguagesTest extends ZanataTestCase {
         versionLanguagesTab = versionLanguagesTab
                 .gotoSettingsTab()
                 .gotoSettingsLanguagesTab()
-                .enterSearchLanguage("en-US")
+                .filterDisabledLanguages("nonexistentLocale")
+                .expectAvailableLocaleListCount(0)
+                .filterDisabledLanguages("en-US")
+                .expectAvailableLocaleListCount(1)
                 .addLocale("en-US");
         versionLanguagesTab.expectNotification("Language \"en-US\" has been " +
                 "enabled.");
@@ -97,5 +95,7 @@ public class EditVersionLanguagesTest extends ZanataTestCase {
         assertThat(enabledLocaleList)
                 .contains("en-US", "fr", "hi", "pl")
                 .as("The languages are available to translate");
+        versionLanguagesTab.filterEnabledLanguages("en-US")
+                .expectEnabledLocaleListCount(1);
     }
 }

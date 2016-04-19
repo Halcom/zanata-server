@@ -32,13 +32,17 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+import javax.enterprise.inject.Any;
 import javax.faces.application.FacesMessage;
+import javax.faces.bean.ViewScoped;
 import javax.faces.event.ValueChangeEvent;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityNotFoundException;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
+import com.google.common.collect.Iterables;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -47,12 +51,9 @@ import org.apache.commons.lang.StringUtils;
 import org.hibernate.Session;
 import org.hibernate.criterion.NaturalIdentifier;
 import org.hibernate.criterion.Restrictions;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Transactional;
-import org.jboss.seam.faces.FacesManager;
-import org.jboss.seam.faces.Redirect;
-import org.zanata.seam.security.ZanataJpaIdentityStore;
+import javax.inject.Inject;
+import javax.inject.Named;
+import org.apache.deltaspike.jpa.api.transaction.Transactional;
 import org.zanata.common.EntityStatus;
 import org.zanata.common.LocaleId;
 import org.zanata.common.ProjectType;
@@ -70,6 +71,7 @@ import org.zanata.model.HProjectIteration;
 import org.zanata.model.WebHook;
 import org.zanata.model.validator.SlugValidator;
 import org.zanata.security.ZanataIdentity;
+import org.zanata.security.annotations.Authenticated;
 import org.zanata.service.LocaleService;
 import org.zanata.service.SlugEntityService;
 import org.zanata.service.ValidationService;
@@ -90,70 +92,81 @@ import com.google.common.collect.Maps;
 
 import static javax.faces.application.FacesMessage.SEVERITY_ERROR;
 
-@Name("projectHome")
+@Named("projectHome")
 @Slf4j
+@ViewScoped
 public class ProjectHome extends SlugHome<HProject> implements
     HasLanguageSettings {
 
     private static final long serialVersionUID = 1L;
 
-    /**
-     * This field is set from http parameter which will be the original slug
-     */
+//    /**
+//     * This field is set from http parameter which will be the original slug
+//     */
+//    @Getter
+//    private String slug;
+
     @Getter
-    private String slug;
+    @Inject
+    @Any
+    private ProjectSlug projectSlug;
 
     /**
      * This field is set from form input which can differ from original slug
      */
     @Getter
     @Setter
+    @Nullable
     private String inputSlugValue;
 
     @Setter
     @Getter
     private Long projectId;
 
-    @In
+    @Inject
     private ZanataIdentity identity;
 
-    @In(required = false, value = ZanataJpaIdentityStore.AUTHENTICATED_USER)
+    @Inject
+    @Authenticated
     private HAccount authenticatedAccount;
 
-    @In
+    @Inject
     private LocaleService localeServiceImpl;
 
-    @In
+    @Inject
     private LocaleDAO localeDAO;
 
-    @In
+    @Inject
     private SlugEntityService slugEntityServiceImpl;
 
-    @In("commonMarkRenderer")
+    @Inject
     private CommonMarkRenderer renderer;
 
-    @In
+    @Inject
     private EntityManager entityManager;
 
-    @In("jsfMessages")
+    @Inject
     private FacesMessages facesMessages;
 
-    @In
+    @Inject
     private Messages msgs;
 
-    @In
+    @Inject
+    private PersonDAO personDAO;
+
+    @Inject
     private AccountRoleDAO accountRoleDAO;
 
-    @In
+    @Inject
     private WebHookDAO webHookDAO;
 
-    @In
+    @Inject
     private ValidationService validationServiceImpl;
 
-    @In
+    @Inject
     private CopyTransOptionsModel copyTransOptionsModel;
 
-    @In
+    @Inject
     private UrlUtil urlUtil;
 
     // This property is present to keep the filter in place when the region with
@@ -202,6 +215,14 @@ public class ProjectHome extends SlugHome<HProject> implements
 
     private List<HLocale> disabledLocales;
 
+    public ProjectHome() {
+        setEntityClass(HProject.class);
+    }
+
+    public String getSlug() {
+        return projectSlug.getValue();
+    }
+
     public List<HLocale> getDisabledLocales() {
         if(disabledLocales == null) {
             disabledLocales = findActiveNotEnabledLocales();
@@ -240,8 +261,8 @@ public class ProjectHome extends SlugHome<HProject> implements
     private String selectedProjectType;
 
     @Getter
-    private ProjectMaintainersAutocomplete maintainerAutocomplete =
-            new ProjectMaintainersAutocomplete();
+    @Inject
+    private ProjectMaintainersAutocomplete maintainerAutocomplete;
 
     @Getter
     private AbstractListFilter<HPerson> maintainerFilter =
@@ -259,26 +280,28 @@ public class ProjectHome extends SlugHome<HProject> implements
             };
 
     public void createNew() {
-        identity.checkPermission(getInstance(), "insert");
-        getInstance().setDefaultProjectType(ProjectType.File);
-        selectedProjectType = getInstance().getDefaultProjectType().name();
+        clearSlugs();
+        HProject instance = getInstance();
+        identity.checkPermission(instance, "insert");
+        instance.setDefaultProjectType(ProjectType.File);
+        selectedProjectType = ProjectType.File.name();
         enteredLocaleAliases.putAll(getLocaleAliases());
         // force get so it will create and populate the hashmap
         getSelectedEnabledLocales();
     }
 
+    @Transactional
     public void updateSelectedProjectType(ValueChangeEvent e) {
         selectedProjectType = (String) e.getNewValue();
         updateProjectType();
     }
 
+    @Transactional
     public void setSelectedProjectType(String selectedProjectType) {
         if (!StringUtils.isEmpty(selectedProjectType)
                 && !selectedProjectType.equals("null")) {
             ProjectType projectType = ProjectType.valueOf(selectedProjectType);
             getInstance().setDefaultProjectType(projectType);
-        } else {
-            getInstance().setDefaultProjectType(null);
         }
     }
 
@@ -286,6 +309,7 @@ public class ProjectHome extends SlugHome<HProject> implements
         return getInstance().isOverrideLocales();
     }
 
+    @Transactional
     public void setOverrideLocales(boolean overrideLocales) {
         getInstance().setOverrideLocales(overrideLocales);
     }
@@ -337,8 +361,9 @@ public class ProjectHome extends SlugHome<HProject> implements
      * alias (if any) is removed for the given locale, otherwise the alias is
      * replaced with the value.
      */
+    @Transactional
     public void updateToEnteredLocaleAlias(LocaleId localeId) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         String enteredAlias = enteredLocaleAliases.get(localeId);
         setLocaleAlias(localeId, enteredAlias);
     }
@@ -397,8 +422,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         return setLocaleAliasSilently(localeId, "");
     }
 
+    @Transactional
     public void removeSelectedLocaleAliases() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         List<LocaleId> removed = new ArrayList<>();
         for (Map.Entry<LocaleId, Boolean> entry :
                 getSelectedEnabledLocales().entrySet()) {
@@ -412,8 +438,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         showRemovedAliasesMessage(removed);
     }
 
+    @Transactional
     public void removeAllLocaleAliases() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         List<LocaleId> removed = new ArrayList<>();
         List<LocaleId> aliasedLocales =
                 new ArrayList<>(getLocaleAliases().keySet());
@@ -446,8 +473,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         }
     }
 
+    @Transactional
     public void disableLocale(HLocale locale) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         disableLocaleSilently(locale);
         facesMessages.addGlobal(FacesMessage.SEVERITY_INFO,
                 msgs.format("jsf.languageSettings.LanguageDisabled",
@@ -455,8 +483,9 @@ public class ProjectHome extends SlugHome<HProject> implements
     }
 
 
+    @Transactional
     public void disableSelectedLocales() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         List<LocaleId> removedLocales = new ArrayList<>();
         for (Map.Entry<LocaleId, Boolean> entry :
                 getSelectedEnabledLocales().entrySet()) {
@@ -502,16 +531,18 @@ public class ProjectHome extends SlugHome<HProject> implements
         return localeWasEnabled;
     }
 
+    @Transactional
     public void enableLocale(HLocale locale) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         enableLocaleSilently(locale);
         LocaleId localeId = locale.getLocaleId();
         facesMessages.addGlobal(FacesMessage.SEVERITY_INFO,
                 msgs.format("jsf.languageSettings.LanguageEnabled", localeId));
     }
 
+    @Transactional
     public void enableSelectedLocales() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         List<LocaleId> addedLocales = new ArrayList<>();
         for (Map.Entry<LocaleId, Boolean> entry : selectedDisabledLocales
                 .entrySet()) {
@@ -556,8 +587,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         return localeWasDisabled;
     }
 
+    @Transactional
     public void useDefaultLocales() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         setOverrideLocales(false);
         removeAliasesForDisabledLocales();
         refreshDisabledLocales();
@@ -617,10 +649,21 @@ public class ProjectHome extends SlugHome<HProject> implements
         disabledLocales = null;
     }
 
+    @Transactional
     public void setRestrictedByRole(String key, boolean checked) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         getInstance().setRestrictedByRoles(checked);
         update();
+    }
+
+    public void setInviteOnly(boolean inviteOnly) {
+        identity.checkPermission(getInstance(), "update");
+        getInstance().setAllowGlobalTranslation(!inviteOnly);
+        update();
+        String message = inviteOnly
+                ? msgs.get("jsf.translation.permission.inviteOnly.Active")
+                : msgs.get("jsf.translation.permission.inviteOnly.Inactive");
+        facesMessages.addGlobal(FacesMessage.SEVERITY_INFO, message);
     }
 
     @Override
@@ -644,7 +687,7 @@ public class ProjectHome extends SlugHome<HProject> implements
         if (project == null || project.getStatus() == EntityStatus.OBSOLETE) {
             log.warn(
                     "Project [id={}, slug={}], does not exist or is soft deleted: {}",
-                    projectId, slug, project);
+                    projectId, getSlug(), project);
             throw new EntityNotFoundException();
         }
     }
@@ -674,8 +717,8 @@ public class ProjectHome extends SlugHome<HProject> implements
             msgs.get("jsf.project.CopyTransOpts.updated"));
     }
 
+    // @Begin(join = true) /* TODO [CDI] commented out begin conversation. Verify it still works properly */
     public void initialize() {
-        initInstance();
         validateSuppliedId();
         if (getInstance().getDefaultCopyTransOpts() != null) {
             copyTransOptionsModel.setInstance(getInstance()
@@ -714,23 +757,25 @@ public class ProjectHome extends SlugHome<HProject> implements
                 && !selectedProjectType.equals("null")) {
             ProjectType projectType = ProjectType.valueOf(selectedProjectType);
             getInstance().setDefaultProjectType(projectType);
-        } else {
-            getInstance().setDefaultProjectType(null);
         }
     }
 
     public void setSlug(String slug) {
-        this.slug = slug;
+        this.projectSlug.setValue(slug);
         this.inputSlugValue = slug;
     }
 
     @Override
+    @Transactional
     public String update() {
-        identity.checkPermission(instance, "update");
-        if (!getInputSlugValue().equals(slug) && !validateSlug(getInputSlugValue(), "slug")) {
+        identity.checkPermission(getInstance(), "update");
+        // getInputSlugValue() can be null
+        if (!getSlug().equals(getInputSlugValue()) && !validateSlug(getInputSlugValue(), "slug")) {
             return null;
         }
-        getInstance().setSlug(getInputSlugValue());
+        if (getInputSlugValue() != null && !getSlug().equals(getInputSlugValue())) {
+            getInstance().setSlug(getInputSlugValue());
+        }
 
         boolean softDeleted = false;
         if (getInstance().getStatus() == EntityStatus.OBSOLETE) {
@@ -742,12 +787,12 @@ public class ProjectHome extends SlugHome<HProject> implements
 
         if (softDeleted) {
             String url = urlUtil.dashboardUrl();
-            FacesManager.instance().redirectToExternalURL(url);
+            urlUtil.redirectTo(url);
             return result;
         }
-        if (!slug.equals(getInstance().getSlug())) {
-            slug = getInstance().getSlug();
-            return "projectSlugUpdated";
+        if (!getSlug().equals(getInstance().getSlug())) {
+            projectSlug.setValue(getInstance().getSlug());
+            return "project-slug-updated";
         }
         return result;
     }
@@ -777,7 +822,11 @@ public class ProjectHome extends SlugHome<HProject> implements
         updateProjectType();
 
         if (authenticatedAccount != null) {
-            getInstance().addMaintainer(authenticatedAccount.getPerson());
+            // authenticatedAccount person is a detached entity, so fetch a copy
+            // that is attached to the current session.
+            HPerson creator = personDAO.findById(
+                    authenticatedAccount.getPerson().getId());
+            getInstance().addMaintainer(creator);
             getInstance().getCustomizedValidations().clear();
             for (ValidationAction validationAction : validationServiceImpl
                     .getValidationActions("")) {
@@ -806,16 +855,14 @@ public class ProjectHome extends SlugHome<HProject> implements
         return list;
     }
 
-    @In
-    private Redirect redirect;
-
+    @Transactional
     public String removeMaintainer(HPerson person) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         if (getInstanceMaintainers().size() <= 1) {
             facesMessages.addGlobal(FacesMessage.SEVERITY_INFO,
                 msgs.get("jsf.project.NeedAtLeastOneMaintainer"));
         } else {
-            getInstance().getMaintainers().remove(person);
+            getInstance().removeMaintainer(person);
             maintainerFilter.reset();
             update();
 
@@ -823,16 +870,15 @@ public class ProjectHome extends SlugHome<HProject> implements
                 msgs.format("jsf.project.MaintainerRemoved",
                     person.getName()));
             if (person.equals(authenticatedAccount.getPerson())) {
-                redirect.setViewId("/project/project.xhtml");
-                redirect.setParameter("slug", getSlug());
-                redirect.execute();
+                urlUtil.redirectTo(urlUtil.projectUrl(getSlug()));
             }
         }
         return "";
     }
 
+    @Transactional
     public void updateRoles(String roleName, boolean isRestricted) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         getInstance().getAllowedRoles().clear();
         if (getInstance().isRestrictedByRoles()) {
             getRoleRestrictions().put(roleName, isRestricted);
@@ -850,8 +896,9 @@ public class ProjectHome extends SlugHome<HProject> implements
             msgs.get("jsf.RolesUpdated"));
     }
 
+    @Transactional
     public void updateStatus(char initial) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         getInstance().setStatus(EntityStatus.valueOf(initial));
         if (getInstance().getStatus() == EntityStatus.READONLY) {
             for (HProjectIteration version : getInstance()
@@ -876,6 +923,7 @@ public class ProjectHome extends SlugHome<HProject> implements
                 EntityStatus.valueOf(initial)));
     }
 
+    @Transactional
     public void deleteSelf() {
         updateStatus('O');
     }
@@ -905,13 +953,10 @@ public class ProjectHome extends SlugHome<HProject> implements
     }
 
     private List<HProjectIteration> fetchVersions() {
-        List<HProjectIteration> results = new ArrayList<HProjectIteration>();
+        List<HProjectIteration> results = Lists.newArrayList(Iterables.filter(
+                getInstance().getProjectIterations(),
+                IS_NOT_OBSOLETE));
 
-        for (HProjectIteration iteration : getInstance().getProjectIterations()) {
-            if (iteration.getStatus() != EntityStatus.OBSOLETE) {
-                results.add(iteration);
-            }
-        }
         Collections.sort(results, new Comparator<HProjectIteration>() {
             @Override
             public int compare(HProjectIteration o1, HProjectIteration o2) {
@@ -932,30 +977,32 @@ public class ProjectHome extends SlugHome<HProject> implements
                     }
                     return -1;
                 }
-
-                if (fromStatus.equals(EntityStatus.OBSOLETE)) {
-                    return 1;
-                }
-
                 return 0;
             }
         });
         return results;
     }
 
+    private final Predicate IS_NOT_OBSOLETE = new Predicate<HProjectIteration>() {
+        @Override
+        public boolean apply(HProjectIteration input) {
+            return input.getStatus() != EntityStatus.OBSOLETE;
+        }
+    };
+
     @Override
     public boolean isIdDefined() {
-        return slug != null;
+        return getSlug() != null;
     }
 
     @Override
     public NaturalIdentifier getNaturalId() {
-        return Restrictions.naturalId().set("slug", slug);
+        return Restrictions.naturalId().set("slug", getSlug());
     }
 
     @Override
     public Object getId() {
-        return slug;
+        return getSlug();
     }
 
     private Map<ValidationId, ValidationAction> getValidations() {
@@ -972,8 +1019,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         return availableValidations;
     }
 
+    @Transactional
     public void updateValidationOption(String name, String state) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         ValidationId validationId = ValidationId.valueOf(name);
 
         for (Map.Entry<ValidationId, ValidationAction> entry : getValidations()
@@ -1002,8 +1050,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         return sortedList;
     }
 
+    @Transactional
     public void addWebHook(String url, String secret) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         if (isValidUrl(url)) {
             secret = StringUtils.isBlank(secret) ? null : secret;
             WebHook webHook = new WebHook(this.getInstance(), url, secret);
@@ -1014,8 +1063,9 @@ public class ProjectHome extends SlugHome<HProject> implements
         }
     }
 
+    @Transactional
     public void removeWebHook(Long webhookId) {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         WebHook webHook = webHookDAO.findById(webhookId);
         if (webHook != null) {
             getInstance().getWebHooks().remove(webHook);
@@ -1068,8 +1118,9 @@ public class ProjectHome extends SlugHome<HProject> implements
     /**
      * Update the about page to the entered value, and show a success message.
      */
+    @Transactional
     public void updateAboutPage() {
-        identity.checkPermission(instance, "update");
+        identity.checkPermission(getInstance(), "update");
         String status = update();
         if ("updated".equals(status)) {
             facesMessages.addGlobal(FacesMessage.SEVERITY_INFO,
@@ -1090,7 +1141,16 @@ public class ProjectHome extends SlugHome<HProject> implements
                 && identity.hasPermission("HProject", "view-obsolete");
     }
 
-    private class ProjectMaintainersAutocomplete extends MaintainerAutocomplete {
+    @ViewScoped
+    public static class ProjectMaintainersAutocomplete extends MaintainerAutocomplete {
+
+        @Inject
+        private ProjectHome projectHome;
+
+        private HProject getInstance() {
+            return projectHome.getInstance();
+        }
+
 
         @Override
         protected List<HPerson> getMaintainers() {
@@ -1103,6 +1163,7 @@ public class ProjectHome extends SlugHome<HProject> implements
          * Action when an item is selected
          */
         @Override
+        @Transactional
         public void onSelectItemAction() {
             if (StringUtils.isEmpty(getSelectedItem())) {
                 return;
@@ -1114,9 +1175,10 @@ public class ProjectHome extends SlugHome<HProject> implements
                             .findByUsername(getSelectedItem());
             getInstance().addMaintainer(maintainer);
             ProjectHome projectHome = ServiceLocator.instance()
-                    .getInstance("projectHome", ProjectHome.class);
+                    .getInstance(ProjectHome.class);
             projectHome.update();
             reset();
+            projectHome.getMaintainerFilter().reset();
 
             getFacesMessages().addGlobal(FacesMessage.SEVERITY_INFO,
                     msgs.format("jsf.project.MaintainerAdded",

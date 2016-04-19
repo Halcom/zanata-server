@@ -21,10 +21,16 @@
 package org.zanata.service;
 
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.util.List;
 
 import org.zanata.common.LocaleId;
-import org.zanata.rest.dto.Glossary;
+import org.zanata.exception.ZanataServiceException;
+import org.zanata.model.HGlossaryEntry;
+import org.zanata.rest.dto.GlossaryEntry;
+import org.zanata.rest.dto.GlossaryResults;
+import org.zanata.service.impl.GlossaryFileServiceImpl;
 
 /**
  *
@@ -32,9 +38,16 @@ import org.zanata.rest.dto.Glossary;
  *
  */
 public interface GlossaryFileService {
-    void saveGlossary(Glossary glossary);
+    /**
+     * Save or update all entries {@link org.zanata.rest.dto.GlossaryEntry}
+     *
+     * @param glossaryEntries
+     */
+    GlossaryFileServiceImpl.GlossaryProcessed saveOrUpdateGlossary(
+            List<GlossaryEntry> glossaryEntries);
 
-    List<Glossary> parseGlossaryFile(InputStream fileContents, String fileName,
-            LocaleId sourceLang, LocaleId transLang,
-            boolean treatSourceCommentsAsTarget, List<String> commentsColumn);
+    List<List<GlossaryEntry>> parseGlossaryFile(InputStream inputStream,
+            String fileName,
+            LocaleId sourceLang, LocaleId transLang) throws
+            ZanataServiceException;
 }

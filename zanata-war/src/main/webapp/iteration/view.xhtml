@@ -2,7 +2,6 @@
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
 <ui:composition xmlns="http://www.w3.org/1999/xhtml"
-  xmlns:s="http://jboss.org/schema/seam/taglib"
   xmlns:ui="http://java.sun.com/jsf/facelets"
   xmlns:h="http://java.sun.com/jsf/html"
   xmlns:f="http://java.sun.com/jsf/core"
@@ -10,6 +9,23 @@
   xmlns:rich="http://richfaces.org/rich"
   xmlns:zanata="http://java.sun.com/jsf/composite/zanata"
   template="../WEB-INF/template/template.xhtml">
+
+  <f:metadata>
+    <f:viewParam name="projectSlug" value="#{versionHomeAction.projectSlug}" />
+    <f:viewParam name="iterationSlug" value="#{versionHomeAction.versionSlug}" />
+
+    <f:viewParam name="projectSlug" value="#{versionHome.projectSlug}" />
+    <f:viewParam name="iterationSlug" value="#{versionHome.slug}" />
+
+    <f:viewParam name="projectSlug" value="#{copyTransAction.projectSlug}" />
+    <f:viewParam name="iterationSlug" value="#{copyTransAction.versionSlug}" />
+
+    <f:viewParam name="projectSlug" value="#{mergeTransAction.targetProjectSlug}" />
+    <f:viewParam name="iterationSlug" value="#{mergeTransAction.targetVersionSlug}" />
+
+    <f:event type="preRenderView" listener="#{versionHome.init(false)}"/>
+    <f:event type="preRenderView" listener="#{versionHome.validateSuppliedId}"/>
+  </f:metadata>
 
 <ui:define name="page_title">
   #{msgs['jsf.Version']} -
@@ -20,8 +36,8 @@
 <script type="text/javascript">
   //<![CDATA[
   jQuery(function () {
-    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/languages/:lang:',
-      function (pre, projectSlug, versionSlug, lang) {
+    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/languages/:lang::?query:',
+      function (pre, projectSlug, versionSlug, lang, query) {
         zanata.tabs.activate(jQuery('#languages_tab'));
         var clickEle = jQuery('a.' + lang);
         if (lang && clickEle.length != 0) {
@@ -31,9 +47,10 @@
         }
       });
 
-    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/documents/:docId*:',
-      function (pre, projectSlug, versionSlug, docId) {
+    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/documents:?query:',
+      function (pre, projectSlug, versionSlug, query) {
         zanata.tabs.activate(jQuery('#documents_tab'));
+        var docId = encodeURIComponent(query.docId);
         var clickEle = jQuery('#' + jqSelector(docId)).children().eq(1);
         if (docId && clickEle.length != 0) {
           updateActiveRow(clickEle);
@@ -42,8 +59,8 @@
         }
       });
 
-    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/settings/:setting:',
-      function (pre, projectSlug, versionSlug, setting) {
+    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/settings/:setting::?query:',
+      function (pre, projectSlug, versionSlug, setting, query) {
         zanata.tabs.activate(jQuery('#settings_tab'));
         setting = setting || 'general';
         setting =
@@ -52,7 +69,7 @@
       });
 
 
-    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/:section:',
+    crossroads.addRoute(':pre*:/iteration/view/{projectSlug}/{versionSlug}/:section::?query:',
       function (pre, projectSlug, versionSlug, section) {
         section = section || 'languages';
         section = validateTab('#' + section + "_tab", section, "languages");
@@ -75,6 +92,8 @@
   .
     show();
     checkIfFileSelected();
+
+    setUploadSourceButtonEnabled(false);
   }
 
   function hideUploadSourcePanel() {
@@ -114,14 +133,16 @@
   <h:form styleClass="l--push-bottom-0">
     <a4j:jsFunction name="reloadLocale" status="languageTab-documentsLoader"
       onbegin="clearHTML('#{rich:clientId('languages-document_list')}');clearHTML('#{rich:clientId('language-label')}');zanata.loader.activate('#languagesTab-language-label-loader')"
-      oncomplete="zanata.loader.deactivate('#languagesTab-language-label-loader')"
+      oncomplete="zanata.loader.deactivate('#languagesTab-language-label-loader'); zanata.panel.init()"
+      limitRender="true"
       render="languages-document_list, language-label, languages-export_options, languageTabDocumentSearch-pager, languageTabDocumentSearch-page-info, languageTabDocumentSearchBottom-pager, languageTabDocumentSearchBottom-page-info">
       <a4j:param name="val1" assignTo="#{versionHomeAction.selectedLocaleId}"/>
     </a4j:jsFunction>
 
     <a4j:jsFunction name="reloadDocument" status="documentsTab-languagesLoader"
       onbegin="clearHTML('#{rich:clientId('documents-language_list')}');clearHTML('#{rich:clientId('document-label')}');zanata.loader.activate('#documentsTab-document-label-loader')"
-      oncomplete="zanata.loader.deactivate('#documentsTab-document-label-loader')"
+      oncomplete="zanata.loader.deactivate('#documentsTab-document-label-loader'); zanata.panel.init()"
+      limitRender="true"
       render="documents-language_list, document-label, documents-language-size, documentsTabLanguageSearch-pager, documentsTabLanguageSearch-page-info, documentsTabLanguageSearchBottom-pager, documentsTabLanguageSearchBottom-page-info"
       action="#{versionHomeAction.setSelectedDocumentId(projSlug, verSlug, docId)}">
       <a4j:param name="val1" assignTo="#{projSlug}"/>
@@ -130,12 +151,14 @@
     </a4j:jsFunction>
 
     <a4j:jsFunction name="refreshStatistics" status="statistic-loader"
-      oncomplete="refreshTooltip('version-page')" limitRender="true"
+      oncomplete="refreshTooltip('version-page')"
+      limitRender="true"
       render="overall_statistic, languages-language_form, languages-document_list, documents-document_form, documents-language_list, settings-document_form, languages-size, documents-size, language-label, document-label"
       action="#{versionHomeAction.resetPageData}"/>
 
     <a4j:jsFunction name="renderStatistics" status="statistic-loader"
-      oncomplete="refreshTooltip('version-page');updateStateFromUrl()"
+      oncomplete="refreshTooltip('version-page'); updateStateFromUrl(); zanata.panel.init()"
+      limitRender="true"
       render="overall_statistic, languages-language_form, documents-document_form, settings-document_form"
       action="#{versionHomeAction.setPageRendered(true)}"/>
 
@@ -154,22 +177,26 @@
 
     <a4j:jsFunction name="onCopyTransComplete"
       action="#{copyTransAction.onComplete()}"
+      limitRender="true"
       render="copyTrans, copy-trans-buttons"
       oncomplete="refreshStatistics();"/>
 
     <a4j:jsFunction name="onCopyVersionComplete"
       action="#{versionHomeAction.copyVersionHandler.onComplete()}"
+      limitRender="true"
       render="copyVersion, version-info, version-more-actions, version-settings"
       oncomplete="refreshStatistics();"/>
 
     <a4j:jsFunction name="onMergeTransComplete"
       action="#{mergeTransAction.onComplete()}"
+      limitRender="true"
       render="mergeTrans, version-more-actions, merge-trans-buttons, selection-section"
       oncomplete="refreshStatistics();"/>
 
     <a4j:jsFunction name="renderSourceDocTypeSelector"
       oncomplete="setUploadSourceButtonEnabled(getSourceDocTypeSelection().val() != '')"
-      render="source-documentType-selection" limitRender="true">
+      limitRender="true"
+      render="source-documentType-selection">
       <a4j:param name="val1" assignTo="#{selectedSourceDocName}"/>
     </a4j:jsFunction>
 
@@ -185,30 +212,30 @@
 <div class="g" id="version-page">
 <div class="g__item w--1-m w--3-8-l w--1-3 l--push-bottom-half">
   <p class="txt--meta l--push-all-0">
-    <s:link view="/project/home.xhtml" propagation="none"
+    <h:link outcome="/project/home.xhtml"
       value="#{msgs['jsf.Projects']}"/>
     <i class="i i--arrow-right"></i>
-    <s:link
-      value="#{versionHomeAction.version.project.name}" propagation="none"
-      view="/project/project.xhtml">
+    <h:link
+      value="#{versionHomeAction.version.project.name}"
+      outcome="/project/project.xhtml">
       <f:param name="slug" value="#{versionHomeAction.projectSlug}"/>
-    </s:link>
+    </h:link>
   </p>
 
-  <s:div styleClass="l--push-bottom-half" id="version-info">
+  <h:panelGroup layout="block"  styleClass="l--push-bottom-half" id="version-info">
     <h1 class="l--push-all-0"><zanata:version-label version="#{versionHome.instance}"/></h1>
-  </s:div>
+  </h:panelGroup>
 
-  <s:div styleClass="progress-bar--large__expander l--pad-bottom-half"
+  <h:panelGroup layout="block"  styleClass="progress-bar--large__expander l--pad-bottom-half"
     id="overall_statistic">
-    <s:fragment rendered="#{versionHomeAction.pageRendered}">
+    <ui:fragment rendered="#{versionHomeAction.pageRendered}">
       <p class="d--top l--pad-top-half txt--mini">
         #{msgs['jsf.TotalSourceContains']}
         <strong>#{versionHomeAction.overallStatistic.total} words</strong>
       </p>
       <ul class="g--tight g--fit">
         <ui:param name="showApproved" value="#{versionHomeAction.overallStatistic.percentApproved ne 0 || versionHome.instance.requireTranslationReview}"/>
-          <s:fragment rendered="#{showApproved}">
+          <ui:fragment rendered="#{showApproved}">
           <li class="g__item l--push-bottom-half">
               <span class="stats txt--state-highlight">
                 <span class="stats__figure">
@@ -218,7 +245,7 @@
                   class="stats__unit txt--lowercase"> #{msgs['jsf.stats.Approved']}</span>
               </span>
           </li>
-        </s:fragment>
+        </ui:fragment>
 
         <li class="g__item l--push-bottom-half">
               <span
@@ -244,11 +271,11 @@
       <zanata:statistic
         value="#{versionHomeAction.overallStatistic}"
         type="large"/>
-    </s:fragment>
+    </ui:fragment>
 
     <zanata:loader type="loader--large"
       rendered="#{!versionHomeAction.pageRendered}"/>
-  </s:div>
+  </h:panelGroup>
   <zanata:version-copy-action-loader id="copyTrans"
     oncomplete="onCopyTransComplete()"
     canCancelProcess="#{identity.hasPermission(versionHomeAction.version, 'update')}"
@@ -287,9 +314,9 @@
           <i class="i i--language"></i>
           <span class="is-hidden--s i__text--right">
             #{msgs['jsf.Languages']}
-            <s:span styleClass="txt--neutral" id="languages-size">
-              #{versionHomeAction.getSupportedLocale().size}
-            </s:span>
+            <h:panelGroup styleClass="txt--neutral" id="languages-size">
+              #{versionHomeAction.getSupportedLocale().size()}
+            </h:panelGroup>
           </span>
         </a>
       </li>
@@ -300,14 +327,13 @@
           <i class="i i--document"></i>
           <span class="is-hidden--s i__text--right">
             #{msgs['jsf.Documents']}
-            <s:span styleClass="txt--neutral"
-              id="documents-size">
-              #{versionHomeAction.getDocuments().size}
-            </s:span>
+            <h:panelGroup styleClass="txt--neutral" id="documents-size">
+              #{versionHomeAction.getDocuments().size()}
+            </h:panelGroup>
           </span>
         </a>
       </li>
-      <s:fragment rendered="#{not empty versionHomeAction.groups}">
+      <ui:fragment rendered="#{not empty versionHomeAction.groups}">
         <li>
           <a id="groups_tab"
             href="#{request.contextPath}/iteration/view/#{versionHomeAction.projectSlug}/#{versionHomeAction.versionSlug}/groups"
@@ -315,19 +341,19 @@
             <i class="i i--group"></i>
             <span class="is-hidden--s i__text--right">
               #{msgs['jsf.Groups']}
-              <s:span styleClass="txt--neutral" id="groups-size">
-                #{versionHomeAction.groups.size}
-              </s:span>
+              <h:panelGroup styleClass="txt--neutral" id="groups-size">
+                #{versionHomeAction.groups.size()}
+              </h:panelGroup>
             </span>
           </a>
         </li>
-      </s:fragment>
+      </ui:fragment>
       <li class="tab__end">
         <h:form>
-          <s:div
+          <h:panelGroup layout="block"
             styleClass="dropdown dropdown--tab dropdown--small dropdown--right dropdown--inline js-dropdown"
             id="version-more-actions">
-            <s:fragment
+            <ui:fragment
               rendered="#{identity.loggedIn}">
               <a class="dropdown__toggle js-dropdown__toggle"
                 title="#{msgs['jsf.tooltip.MoreActions']}" href="#">
@@ -335,12 +361,13 @@
               </a>
               <ul class="dropdown__content js-dropdown__content"
                 role="content" aria-labelledby="dropdownContent">
-                <s:fragment rendered="#{not versionHomeAction.isCopyActionsRunning()}">
-                  <s:fragment
+                <ui:fragment rendered="#{not versionHomeAction.isCopyActionsRunning()}">
+                  <ui:fragment
                     rendered="#{identity.hasPermission(versionHomeAction.version, 'update')}">
                     <li>
                       <a href="javascript:void(0)" class="i__item--right"
-                        onclick="zanata.modal.show('#copy-trans-modal')">
+                          data-toggle="modal"
+                          data-target="#copy-trans-modal">
                         #{msgs['jsf.CopyTrans']}
                         <i class="i i--translate i__item__icon"></i>
                       </a>
@@ -354,22 +381,22 @@
                         <i class="i i--import i__item__icon"></i>
                       </a>
                     </li>
-                  </s:fragment>
-                  <s:fragment
+                  </ui:fragment>
+                  <ui:fragment
                     rendered="#{identity.hasPermission(versionHome.instance, 'insert')}">
                     <li>
-                      <s:link view="/project/add_iteration.xhtml"
-                        styleClass="i__item--right" propagation="none"
+                      <h:link outcome="/project/add_iteration.xhtml"
+                        styleClass="i__item--right"
                         value="#{msgs['jsf.copyVersion.versionPage.label']}">
                         <f:param name="projectSlug"
                           value="#{versionHome.projectSlug}"/>
                         <f:param name="copyFromVersionSlug"
                           value="#{versionHome.slug}"/>
                         <i class="i i--plus i__item__icon"></i>
-                      </s:link>
+                      </h:link>
                     </li>
-                  </s:fragment>
-                </s:fragment>
+                  </ui:fragment>
+                </ui:fragment>
                 <li>
                   <h:commandLink title="#{msgs['jsf.GenerateProjectConfig']}"
                     styleClass="i__item--right"
@@ -392,11 +419,11 @@
                   </h:outputLink>
                 </li>
               </ul>
-            </s:fragment>
-          </s:div>
+            </ui:fragment>
+          </h:panelGroup>
         </h:form>
       </li>
-      <s:fragment
+      <ui:fragment
         rendered="#{identity.hasPermission(versionHomeAction.version, 'update')}">
         <li class="tab__end">
           <a id="settings_tab"
@@ -409,7 +436,7 @@
             <i class="i i--settings"></i>
           </a>
         </li>
-      </s:fragment>
+      </ui:fragment>
     </ul>
 
     <ul class="tabs__content panels__container js-tabs-content l--push-top-1">
@@ -423,29 +450,29 @@
           src="../WEB-INF/layout/version/documents-tab.xhtml"/>
       </li>
 
-      <s:fragment rendered="#{!versionHomeAction.groups.isEmpty()}">
+      <ui:fragment rendered="#{!versionHomeAction.groups.isEmpty()}">
         <li id="groups">
           <ui:include
             src="../WEB-INF/layout/version/groups-tab.xhtml"/>
         </li>
-      </s:fragment>
+      </ui:fragment>
 
-      <s:fragment
+      <ui:fragment
         rendered="#{identity.hasPermission(versionHomeAction.version, 'update')}">
         <li id="settings">
           <ui:include
             src="../WEB-INF/layout/version/settings-tab.xhtml"/>
         </li>
-      </s:fragment>
+      </ui:fragment>
     </ul>
   </div>
 </div>
 </div>
 
-  <s:fragment
+  <ui:fragment
     rendered="#{identity.hasPermission(versionHomeAction.version, 'update')}">
     <ui:include src="../WEB-INF/layout/version/merge_trans_modal.xhtml"/>
-  </s:fragment>
+  </ui:fragment>
 
 <rich:popupPanel id="uploadSourcePanel"
   moveable="#{true}"
@@ -454,29 +481,33 @@
   <f:facet name="header">
     <h:outputText id="uploadSourcePanelHeader"/>
   </f:facet>
-  <h:form id="uploadSrcForm" enctype="multipart/form-data">
-    <s:fileUpload id="specificDocFileInput"
-      accept="*"
-      onchange="checkIfFileSelected();"
-      data="#{versionHomeAction.sourceFileUpload.fileContents}"
-      fileName="#{versionHomeAction.sourceFileUpload.fileName}"/>
+  <h:form id="uploadSrcForm" >
+    <a4j:jsFunction name="clearSourceUpload" action="#{versionHomeAction.clearSourceFileUpload}"/>
+
+    <rich:fileUpload
+      fileUploadListener="#{versionHomeAction.sourceFileUploaded}"
+      addControlLabel="Select file..." clearAllLabel="Clear all" clearLabel="Clear"
+      uploadLabel="upload" immediateUpload="true" maxFilesQuantity="1" listHeight="60"
+      onclear="clearSourceUpload();setUploadSourceButtonEnabled(false);"
+      onfilesubmit="setUploadSourceButtonEnabled(true);"
+      />
     <h:inputHidden id="uploadSourceDocId"
       value="#{versionHomeAction.sourceFileUpload.docId}"/>
     <br/>
     <h:selectOneMenu
       value="#{versionHomeAction.sourceFileUpload.sourceLang}">
-      <f:selectItem itemLabel="#{msgs['jsf.upload.selectDocType']}"
+      <f:selectItem itemLabel="#{msgs['jsf.SelectALanguageFromList']}"
         itemValue="#{null}" noSelectionOption="false" />
-      <s:selectItems
+      <f:selectItems
         value="#{versionHomeAction.availableSourceLocales}" var="locale"
-        label="#{locale.retrieveNativeName()}"
+        itemLabel="#{locale.retrieveNativeName()}" itemLabelEscaped="true"
         itemValue="#{locale.localeId.toString()}"
-        escape="true"/>
+        />
       <h:outputLabel value="#{msgs['jsf.SourceLanguage']}"/>
     </h:selectOneMenu>
 
-    <s:div id="source-documentType-selection">
-      <s:fragment rendered="#{versionHomeAction.needDocumentTypeSelection(selectedSourceDocName)}">
+    <h:panelGroup layout="block"  id="source-documentType-selection">
+      <ui:fragment rendered="#{versionHomeAction.needDocumentTypeSelection(selectedSourceDocName)}">
         <h:outputLabel styleClass="l--push-top-half">#{msgs['jsf.iteration.documentType.select']}</h:outputLabel>
         <h:selectOneMenu id="sourceDocumentTypes" onchange="bindSourceDocumentType(jQuery(this).val())"
           value="#{versionHomeAction.sourceFileUpload.documentType}">
@@ -487,8 +518,8 @@
             itemLabel="#{documentType.name()}"
             itemValue="#{documentType.name()}"/>
         </h:selectOneMenu>
-      </s:fragment>
-    </s:div>
+      </ui:fragment>
+    </h:panelGroup>
 
     <rich:collapsiblePanel
       header="#{msgs['jsf.iteration.files.CustomParams']}"
@@ -515,6 +546,8 @@
     </div>
   </h:form>
 </rich:popupPanel>
+
+<ui:include src="/WEB-INF/layout/copy_trans_inline_modal.xhtml"/>
 
 </ui:define>
 

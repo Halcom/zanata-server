@@ -20,36 +20,30 @@
  */
 package org.zanata.action;
 
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Set;
 
-import javax.annotation.Nullable;
+import javax.faces.application.FacesMessage;
+import javax.inject.Inject;
+import javax.inject.Named;
 
 import lombok.Getter;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
-import org.apache.commons.lang.StringUtils;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.faces.FacesMessages;
-import org.jboss.seam.international.StatusMessage;
-import org.zanata.seam.security.ZanataJpaIdentityStore;
+import org.codehaus.jackson.map.ObjectMapper;
+import org.zanata.ApplicationConfiguration;
+import org.zanata.rest.dto.User;
+import org.zanata.rest.editor.dto.Permission;
+import org.zanata.rest.editor.service.UserService;
 import org.zanata.dao.AccountDAO;
 import org.zanata.dao.PersonDAO;
 import org.zanata.i18n.Messages;
 import org.zanata.model.HAccount;
-import org.zanata.model.HLocale;
-import org.zanata.model.HPerson;
 import org.zanata.security.ZanataIdentity;
-import org.zanata.service.GravatarService;
+import org.zanata.security.annotations.Authenticated;
+import org.zanata.ui.faces.FacesMessages;
 
-import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
-import com.google.common.collect.Collections2;
 
 import static org.apache.commons.lang.StringUtils.abbreviate;
 
@@ -60,42 +54,38 @@ import static org.apache.commons.lang.StringUtils.abbreviate;
  * @see NewProfileAction for new user profile form page
  *
  */
-@Name("profileHome")
-@Scope(ScopeType.PAGE)
+@Named("profileHome")
+@javax.faces.bean.ViewScoped
 @Slf4j
 public class ProfileHome implements Serializable {
     private static final long serialVersionUID = 1L;
     private String username;
 
     @Getter
-    private String name;
+    private User user;
 
-    @Getter
-    private String userImageUrl;
-
-    @Getter
-    private String userLanguageTeams;
-
-    @In
-    ZanataIdentity identity;
-    @In(required = false, value = ZanataJpaIdentityStore.AUTHENTICATED_USER)
-    HAccount authenticatedAccount;
-    @In
-    PersonDAO personDAO;
-    @In
-    AccountDAO accountDAO;
-    @In
-    private GravatarService gravatarServiceImpl;
-    @In
-    Messages msgs;
+    @Inject
+    private ZanataIdentity identity;
+    @Inject @Authenticated
+    private HAccount authenticatedAccount;
+    @Inject
+    private PersonDAO personDAO;
+    @Inject
+    private AccountDAO accountDAO;
+    @Inject
+    private Messages msgs;
+    @Inject
+    private UserService userService;
+    @Inject
+    private FacesMessages jsfMessages;
+    @Inject
+    private ApplicationConfiguration applicationConfiguration;
 
     private void init() {
-        HAccount account;
-        FacesMessages facesMessages = FacesMessages.instance();
-        account = accountDAO.getByUsername(username);
+        HAccount account = accountDAO. getByUsername(username);
         if (account == null) {
-            facesMessages.clear();
-            facesMessages.add(StatusMessage.Severity.ERROR,
+            jsfMessages.clear();
+            jsfMessages.addGlobal(FacesMessage.SEVERITY_ERROR,
                     msgs.format("jsf.UsernameNotAvailable", abbreviate(username,
                             24)));
             account = useAuthenticatedAccount();
@@ -104,22 +94,12 @@ public class ProfileHome implements Serializable {
                 return;
             }
         }
-        HPerson person =
-                personDAO.findById(account.getPerson().getId());
-        Set<HLocale> languageMemberships = person.getLanguageMemberships();
-        name = person.getName();
-        userImageUrl = gravatarServiceImpl
-                .getUserImageUrl(GravatarService.USER_IMAGE_SIZE,
-                        person.getEmail());
-        userLanguageTeams = Joiner.on(", ").skipNulls().join(
-                Collections2.transform(languageMemberships,
-                        new Function<HLocale, Object>() {
-                            @Nullable
-                            @Override
-                            public Object apply(@NonNull HLocale locale) {
-                                return locale.retrieveDisplayName();
-                            }
-                        }));
+        user = userService.transferToUser(account, displayEmail());
+    }
+
+    private boolean displayEmail() {
+        return (applicationConfiguration.isDisplayUserEmail()
+                && identity.isLoggedIn()) || identity.hasRole("admin");
     }
 
     private HAccount useAuthenticatedAccount() {
@@ -130,6 +110,14 @@ public class ProfileHome implements Serializable {
             return account;
         }
         return null;
+    }
+
+    public User getAuthenticatedUser() {
+        if(authenticatedAccount == null) {
+            return new User();
+        }
+        //This is to get self information, email should be visible
+        return userService.transferToUser(authenticatedAccount, true);
     }
 
     public String getUsername() {
@@ -143,5 +131,22 @@ public class ProfileHome implements Serializable {
     public void setUsername(String username) {
         this.username = username;
         init();
+    }
+
+    public Permission getUserPermission() {
+        Permission permission = new Permission();
+        boolean authenticated = authenticatedAccount != null;
+        permission.put("authenticated", authenticated);
+        return permission;
+    }
+
+    public String convertToJSON(User user) {
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            return mapper.writeValueAsString(user);
+        } catch (IOException e) {
+            return this.getClass().getName() + "@"
+                + Integer.toHexString(this.hashCode());
+        }
     }
 }

@@ -3,36 +3,26 @@ package org.zanata.action;
 import java.io.Serializable;
 import java.util.List;
 
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Install;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.jboss.seam.annotations.datamodel.DataModel;
-import org.jboss.seam.annotations.datamodel.DataModelSelection;
+import javax.inject.Inject;
+import org.apache.deltaspike.core.api.exclude.Exclude;
+import org.apache.deltaspike.core.api.projectstage.ProjectStage;
+import javax.inject.Named;
 import org.zanata.seam.security.IdentityManager;
 import org.zanata.security.annotations.CheckRole;
-import org.zanata.security.annotations.ZanataSecured;
-
-import static org.jboss.seam.ScopeType.SESSION;
-import static org.jboss.seam.annotations.Install.APPLICATION;
 
 /**
  * @author Patrick Huang <a
  *         href="mailto:pahuang@redhat.com">pahuang@redhat.com</a>
  */
-@Name("org.jboss.seam.security.management.userSearch")
-@Scope(SESSION)
-@Install(precedence = APPLICATION)
-@ZanataSecured
+@Named("userSearch")
+// TODO this should probably be ViewScoped or even RequestScoped (with changes in xhtml)
+@javax.enterprise.context.SessionScoped
+
 public class UserSearch implements Serializable {
     private static final long serialVersionUID = -4792732235757055958L;
-    @DataModel
-    List<String> users;
+    private List<String> users;
 
-    @DataModelSelection
-    String selectedUser;
-
-    @In
+    @Inject
     IdentityManager identityManager;
 
     @CheckRole("admin")
@@ -56,7 +46,7 @@ public class UserSearch implements Serializable {
         return sb.toString();
     }
 
-    public String getSelectedUser() {
-        return selectedUser;
+    public List<String> getUsers() {
+        return users;
     }
 }

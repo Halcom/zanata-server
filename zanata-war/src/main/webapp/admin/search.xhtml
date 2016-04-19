@@ -1,13 +1,17 @@
 <!DOCTYPE composition PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <ui:composition xmlns="http://www.w3.org/1999/xhtml"
-  xmlns:s="http://jboss.org/schema/seam/taglib"
   xmlns:ui="http://java.sun.com/jsf/facelets"
   xmlns:h="http://java.sun.com/jsf/html"
   xmlns:rich="http://richfaces.org/rich"
   xmlns:a4j="http://richfaces.org/a4j"
+  xmlns:f="http://java.sun.com/jsf/core"
   xmlns:zanata="http://java.sun.com/jsf/composite/zanata"
   template="../WEB-INF/template/template.xhtml">
+
+  <f:metadata>
+    <f:event type="preRenderView" listener="#{identity.checkRole('admin')}"/>
+  </f:metadata>
 
   <ui:define name="page_title">#{msgs['jsf.ManageSearch']}</ui:define>
   <ui:define name="center_content">
@@ -21,7 +25,7 @@
     <div class="g">
       <div class="g__item w--1-m w--3-8-l w--1-3 l--push-bottom-half">
         <p class="txt--meta l--push-all-0">
-          <s:link view="/admin/home.xhtml" propagation="none"
+          <h:link outcome="/admin/home.xhtml"
             value="#{msgs['jsf.Administration']}"/>
         </p>
 
@@ -32,39 +36,39 @@
           </h1>
         </div>
 
-        <s:div styleClass="panel l--push-top-1" id="progress">
+        <h:panelGroup layout="block"  styleClass="panel l--push-top-1" id="progress">
           <div class="panel__header">
-            <s:div styleClass="panel__header__actions l--push-right-half l--push-bottom-0"
+            <h:panelGroup layout="block"  styleClass="panel__header__actions l--push-right-half l--push-bottom-0"
               rendered="#{reindexAction.inProgress and !reindexAction.canceled}">
               <h:form styleClass="l--push-bottom-0">
                 <a4j:commandLink id="cancel" styleClass="button--small button--link"
                   value="#{msgs['jsf.ManageSearch.Abort']}"
                   action="#{reindexAction.cancel}" render="actions,progress"/>
               </h:form>
-            </s:div>
+            </h:panelGroup>
             <h2 class="panel__heading--small">#{msgs['jsf.ManageSearch.CurrentProgress']}</h2>
           </div>
 
           <div class="l--pad-all-half">
-            <s:fragment rendered="#{!reindexAction.inProgress}">
+            <ui:fragment rendered="#{!reindexAction.inProgress}">
               <p id="noOperationsRunning" class="txt--meta">
                 <h:outputText escape="false"
                   value="#{msgs['jsf.ManageSearch.NoOperationsRunning']}" />
               </p>
-            </s:fragment>
-            <s:fragment rendered="#{reindexAction.reindexedSinceServerRestart and !reindexAction.inProgress and !reindexAction.canceled and !reindexAction.error}">
+            </ui:fragment>
+            <ui:fragment rendered="#{reindexAction.reindexedSinceServerRestart and !reindexAction.inProgress and !reindexAction.canceled and !reindexAction.error}">
               <p id="completed" class="txt--meta">
                 <h:outputText
                   value="#{msgs.format('jsf.ManageSearch.Completed', reindexAction.elapsedTime)}" />
               </p>
-            </s:fragment>
-            <s:fragment rendered="#{reindexAction.canceled}">
+            </ui:fragment>
+            <ui:fragment rendered="#{reindexAction.canceled}">
               <p id="aborted" class="txt--meta">
                 <h:outputText escape="false"
                   value="#{msgs.format('jsf.ManageSearch.Aborted', reindexAction.elapsedTime)}" />
               </p>
-            </s:fragment>
-            <s:fragment rendered="#{reindexAction.error}">
+            </ui:fragment>
+            <ui:fragment rendered="#{reindexAction.error}">
               <p class="txt--meta txt--danger">
                 <h:outputText escape="false"
                   value="#{msgs['jsf.manageSearch.ErrorMessage']}" />
@@ -72,12 +76,12 @@
                 <h:outputText escape="false"
                   value="#{msgs['jsf.manageSearch.PleaseReindex']}" />
               </p>
-            </s:fragment>
+            </ui:fragment>
 
             <a4j:outputPanel layout="block">
               <a4j:poll render="progress,actions" enabled="#{reindexAction.inProgress}"/>
 
-              <s:fragment rendered="#{reindexAction.inProgress}">
+              <ui:fragment rendered="#{reindexAction.inProgress}">
                 <ul class="list--panel bg--higher">
                   <li>
                     <div class="list__item__content">
@@ -105,16 +109,15 @@
                     </div>
                   </li>
                 </ul>
-              </s:fragment>
+              </ui:fragment>
             </a4j:outputPanel>
           </div>
-        </s:div>
+        </h:panelGroup>
       </div>
 
       <div class="g__item w--1-m w--5-8-l w--2-3">
         <h:form id="form">
-          <s:token allowMultiplePosts="true"/>
-            <s:div id="actions">
+            <h:panelGroup layout="block"  id="actions">
                 <table class="bg--pop-highest l--push-bottom-1">
                   <thead>
                     <tr>
@@ -130,60 +133,27 @@
                           disabled="#{not reindexAction.canceled and reindexAction.inProgress}">
                           <a4j:ajax event="click" render="actions" execute="@this"/>
                         </h:selectBooleanCheckbox>
-                        <s:span styleClass="l--push-left-quarter">
-                          #{msgs['jsf.manageSearch.purge']} <i class="i i--info txt--meta"></i>
-                          <rich:tooltip showDelay="800">
-                            <p>#{msgs['jsf.manageSearch.purge.Description']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.purge.ObsoletesOccupyDiskSpace']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.purge.RemoveByRunningOptimize']}</p>
-                          </rich:tooltip>
-                        </s:span>
+                        <span class="l--push-left-quarter">
+                          #{msgs['jsf.manageSearch.purge']} <i class="i i--info txt--meta" title="#{msgs['jsf.manageSearch.purge.Description']}"></i>
+                        </span>
                       </th>
                       <th class="l--pad-v-half">
                         <h:selectBooleanCheckbox value="#{reindexAction.reindexAll}" id="reindexAllChk"
                           disabled="#{not reindexAction.canceled and reindexAction.inProgress}">
                           <a4j:ajax event="click" render="actions" execute="@this"/>
                         </h:selectBooleanCheckbox>
-                        <s:span styleClass="l--push-left-quarter">
-                          #{msgs['jsf.manageSearch.reindex']} <i class="i i--info txt--meta"></i>
-                          <rich:tooltip showDelay="800">
-                            <p>#{msgs['jsf.manageSearch.reindex.Description']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.reindex.OnlyWhenOutOfDate']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.reindex.AllRowsWillBeReindexed']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.reindex.IndexedRowsWillBeUpdated']}</p>
-                            <p>
-                              <em>#{msgs['jsf.manageSearch.reindex.TimeAndMemoryWarning']}</em>
-                            </p>
-                            <p>
-                              <em>#{msgs['jsf.manageSearch.reindex.RunDuringOffPeak']}</em>
-                            </p>
-                          </rich:tooltip>
-                        </s:span>
+                        <span class="l--push-left-quarter">
+                          #{msgs['jsf.manageSearch.reindex']} <i class="i i--info txt--meta" title="#{msgs['jsf.manageSearch.reindex.Description']} #{msgs['jsf.manageSearch.reindex.Description.details']}"></i>
+                        </span>
                       </th>
                       <th class="l--pad-v-half">
                         <h:selectBooleanCheckbox value="#{reindexAction.optimizeAll}"
                           disabled="#{not reindexAction.canceled and reindexAction.inProgress}">
                           <a4j:ajax event="click" render="actions" execute="@this"/>
                         </h:selectBooleanCheckbox>
-                        <s:span styleClass="l--push-left-quarter">
-                          #{msgs['jsf.manageSearch.optimize']} <i class="i i--info txt--meta"></i>
-                          <rich:tooltip showDelay="800">
-                            <p>#{msgs['jsf.manageSearch.optimize.Description']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.optimize.RemovesObsoleteEntries']}</p>
-
-                            <p>#{msgs['jsf.manageSearch.optimize.WillNotInfluenceIndexTime']}</p>
-
-                            <p>
-                              <em>#{msgs['jsf.manageSearch.optimize.TempFileWarning']}</em>
-                            </p>
-                          </rich:tooltip>
-                        </s:span>
+                        <span class="l--push-left-quarter">
+                          #{msgs['jsf.manageSearch.optimize']} <i class="i i--info txt--meta" title="#{msgs['jsf.manageSearch.optimize.Description']} #{msgs['jsf.manageSearch.optimize.TempFileWarning']}"></i>
+                        </span>
                       </th>
                     </tr>
                   </thead>
@@ -220,7 +190,7 @@
                   </tbody>
                 </table>
 
-                <s:fragment rendered="#{not reindexAction.isAnyOptionSelected() or (not reindexAction.canceled and reindexAction.inProgress)}">
+                <ui:fragment rendered="#{not reindexAction.isAnyOptionSelected() or (not reindexAction.canceled and reindexAction.inProgress)}">
                   <button id="clearSelection" onclick="return false;"
                     class="button--link l--push-right-half" disabled="disabled">
                     #{msgs['jsf.ManageSearch.SelectNone']}
@@ -230,9 +200,9 @@
                     class="button button--primary" disabled="disabled">
                     #{msgs['jsf.ManageSearch.PerformSelectedActions']}
                   </button>
-                </s:fragment>
+                </ui:fragment>
 
-                <s:fragment rendered="#{reindexAction.isAnyOptionSelected() and (reindexAction.canceled or not reindexAction.inProgress)}">
+                <ui:fragment rendered="#{reindexAction.isAnyOptionSelected() and (reindexAction.canceled or not reindexAction.inProgress)}">
                   <button id="clearSelection" onclick="clearAllSelection();return false;"
                     class="button--link l--push-right-half">
                     #{msgs['jsf.ManageSearch.SelectNone']}
@@ -242,9 +212,9 @@
                     class="button button--primary ">
                     #{msgs['jsf.ManageSearch.PerformSelectedActions']}
                   </button>
-                </s:fragment>
+                </ui:fragment>
 
-              </s:div>
+              </h:panelGroup>
         </h:form>
       </div>
     </div>

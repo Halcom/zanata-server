@@ -28,11 +28,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
-import org.zanata.seam.security.ZanataJpaIdentityStore;
+import javax.inject.Inject;
+import javax.inject.Named;
+import org.zanata.dao.ProjectMemberDAO;
 import org.zanata.common.LocaleId;
 import org.zanata.dao.LocaleDAO;
 import org.zanata.dao.ProjectIterationDAO;
@@ -43,6 +41,7 @@ import org.zanata.model.HLocale;
 import org.zanata.model.HPerson;
 import org.zanata.model.HProject;
 import org.zanata.model.HProjectIteration;
+import org.zanata.security.annotations.Authenticated;
 import org.zanata.service.VersionGroupService;
 import org.zanata.service.VersionLocaleKey;
 import org.zanata.ui.AbstractListFilter;
@@ -61,28 +60,32 @@ import lombok.Setter;
  * @author Alex Eng <a href="mailto:aeng@redhat.com">aeng@redhat.com</a>
  */
 
-@Name("versionGroupHomeAction")
-@Scope(ScopeType.PAGE)
+@Named("versionGroupHomeAction")
+@javax.faces.bean.ViewScoped
 public class VersionGroupHomeAction extends AbstractSortAction implements
         Serializable {
     private static final long serialVersionUID = 1L;
 
-    @In
+    @Inject
+    private ProjectMemberDAO projectMemberDAO;
+
+    @Inject
     private VersionGroupService versionGroupServiceImpl;
 
-    @In
+    @Inject
     private Messages msgs;
 
-    @In(required = false, value = ZanataJpaIdentityStore.AUTHENTICATED_USER)
+    @Inject
+    @Authenticated
     private HAccount authenticatedAccount;
 
-    @In
+    @Inject
     private VersionGroupDAO versionGroupDAO;
 
-    @In
+    @Inject
     private ProjectIterationDAO projectIterationDAO;
 
-    @In
+    @Inject
     private LocaleDAO localeDAO;
 
     @Getter
@@ -316,7 +319,7 @@ public class VersionGroupHomeAction extends AbstractSortAction implements
 
     public boolean isUserProjectMaintainer() {
         return authenticatedAccount != null
-                && authenticatedAccount.getPerson().isMaintainerOfProjects();
+                && projectMemberDAO.isMaintainerOfAnyProject(authenticatedAccount.getPerson());
     }
 
     /**
@@ -548,7 +551,7 @@ public class VersionGroupHomeAction extends AbstractSortAction implements
 
     @Override
     protected String getMessage(String key, Object... args) {
-        return msgs.format(key, args);
+        return msgs.formatWithAnyArgs(key, args);
     }
 
     public void setSelectedLocaleId(String localeId) {

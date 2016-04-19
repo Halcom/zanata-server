@@ -24,18 +24,16 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.zanata.common.LocaleId;
 import org.zanata.feature.Feature;
-import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.feature.testharness.TestPlan.DetailedTest;
+import org.zanata.feature.testharness.ZanataTestCase;
 import org.zanata.page.projectversion.VersionLanguagesPage;
 import org.zanata.rest.dto.resource.TranslationsResource;
 import org.zanata.util.Constants;
 import org.zanata.util.PropertiesHolder;
-import org.zanata.util.SampleProjectRule;
 import org.zanata.util.ZanataRestCaller;
 import org.zanata.workflow.BasicWorkFlow;
 import org.zanata.workflow.ClientWorkFlow;
@@ -60,8 +58,6 @@ import static org.zanata.workflow.BasicWorkFlow.PROJECT_VERSION_TEMPLATE;
 @Category(DetailedTest.class)
 public class ProjectMaintainerTest extends ZanataTestCase {
 
-    @Rule
-    public SampleProjectRule rule = new SampleProjectRule();
     private ClientWorkFlow client = new ClientWorkFlow();
     private File projectRootPath = client.getProjectRootPath("plural");
     private String translatorConfig = ClientWorkFlow
@@ -72,6 +68,12 @@ public class ProjectMaintainerTest extends ZanataTestCase {
             return name.endsWith(".properties");
         }
     };
+
+    /**
+     * This is workaround for https://zanata.atlassian.net/browse/ZNTA-1011
+     * TODO: remove this and replace with shared pom.xml file in all zanata-maven-plugin
+     */
+    public final static String MAVEN_PLUGIN = "org.zanata:zanata-maven-plugin:3.8.1";
 
     @Feature(summary = "A non-maintainer user may not push to a project",
             tcmsTestPlanIds = 5316, tcmsTestCaseIds = 91146)
@@ -167,11 +169,11 @@ public class ProjectMaintainerTest extends ZanataTestCase {
                 .build());
 
         // copy a pom file
-        generateZanataXml(new File(workDir, "zanata.xml"), projectSlug,
-                iterationSlug, projectType, Lists.newArrayList("pl"));
 
+        generateZanataXml(new File(workDir, "zanata.xml"), projectSlug,
+            iterationSlug, projectType, Lists.newArrayList("pl"));
         client.callWithTimeout(workDir,
-                "mvn -B org.zanata:zanata-maven-plugin:push -Dzanata.userConfig="
+                "mvn -B " + MAVEN_PLUGIN + ":push -Dzanata.userConfig="
                         + translatorConfig);
 
         // only message1 has translation
@@ -184,14 +186,14 @@ public class ProjectMaintainerTest extends ZanataTestCase {
         // dryRun creates nothing
         File transDir = Files.createTempDir();
         client.callWithTimeout(workDir,
-                "mvn -B org.zanata:zanata-maven-plugin:pull -DdryRun -Dzanata.userConfig="
+                "mvn -B " + MAVEN_PLUGIN + ":pull -DdryRun -Dzanata.userConfig="
                         + translatorConfig + " -Dzanata.transDir=" + transDir);
         assertThat(transDir.listFiles(propFilter)).isEmpty();
 
         // create skeletons is false will only pull translated files
         client.callWithTimeout(
                 workDir,
-                "mvn -B org.zanata:zanata-maven-plugin:pull -Dzanata.createSkeletons=false -Dzanata.userConfig="
+                "mvn -B " + MAVEN_PLUGIN + ":pull -Dzanata.createSkeletons=false -Dzanata.userConfig="
                         + translatorConfig
                         + " -Dzanata.transDir="
                         + transDir.getAbsolutePath());
@@ -202,7 +204,7 @@ public class ProjectMaintainerTest extends ZanataTestCase {
         // pull both
         client.callWithTimeout(
                 workDir,
-                "mvn -B org.zanata:zanata-maven-plugin:pull -Dzanata.pullType=both -Dzanata.userConfig="
+                "mvn -B " + MAVEN_PLUGIN + ":pull -Dzanata.pullType=both -Dzanata.userConfig="
                         + translatorConfig
                         + " -Dzanata.transDir="
                         + transDir.getAbsolutePath());

@@ -3,17 +3,15 @@ package org.zanata.webtrans.server.rpc;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jboss.seam.ScopeType;
-import org.jboss.seam.annotations.In;
-import org.jboss.seam.annotations.Name;
-import org.jboss.seam.annotations.Scope;
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.inject.Named;
 import org.zanata.common.LocaleId;
 import org.zanata.dao.GlossaryDAO;
 import org.zanata.exception.ZanataServiceException;
 import org.zanata.model.HGlossaryEntry;
 import org.zanata.model.HGlossaryTerm;
 import org.zanata.model.HLocale;
-import org.zanata.model.HTermComment;
 import org.zanata.security.ZanataIdentity;
 import org.zanata.service.LocaleService;
 import org.zanata.webtrans.server.ActionHandlerFor;
@@ -26,20 +24,20 @@ import lombok.extern.slf4j.Slf4j;
 import net.customware.gwt.dispatch.server.ExecutionContext;
 import net.customware.gwt.dispatch.shared.ActionException;
 
-@Name("webtrans.gwt.GetGlossaryDetailsHandler")
-@Scope(ScopeType.STATELESS)
+@Named("webtrans.gwt.GetGlossaryDetailsHandler")
+@RequestScoped
 @ActionHandlerFor(GetGlossaryDetailsAction.class)
 @Slf4j
 public class GetGlossaryDetailsHandler
         extends
         AbstractActionHandler<GetGlossaryDetailsAction, GetGlossaryDetailsResult> {
-    @In
+    @Inject
     private ZanataIdentity identity;
 
-    @In
+    @Inject
     private GlossaryDAO glossaryDAO;
 
-    @In
+    @Inject
     private LocaleService localeServiceImpl;
 
     @Override
@@ -68,21 +66,13 @@ public class GetGlossaryDetailsHandler
 
         for (HGlossaryTerm srcTerm : srcTerms) {
             HGlossaryEntry entry = srcTerm.getGlossaryEntry();
-            List<String> srcComments = new ArrayList<String>();
-            List<String> targetComments = new ArrayList<String>();
-
             HGlossaryTerm hGlossaryTerm = entry.getGlossaryTerms().get(hLocale);
-            for (HTermComment termComment : srcTerm.getComments()) {
-                srcComments.add(termComment.getComment());
-            }
 
-            for (HTermComment termComment : hGlossaryTerm.getComments()) {
-                targetComments.add(termComment.getComment());
-            }
-
-            items.add(new GlossaryDetails(srcTerm.getContent(), hGlossaryTerm
-                    .getContent(), srcComments, targetComments, entry
-                    .getSourceRef(), entry.getSrcLocale().getLocaleId(),
+            items.add(new GlossaryDetails(entry.getId(),
+                    srcTerm.getContent(), hGlossaryTerm.getContent(),
+                    entry.getDescription(), entry.getPos(),
+                    hGlossaryTerm.getComment(), entry.getSourceRef(),
+                    entry.getSrcLocale().getLocaleId(),
                     hLocale.getLocaleId(), hGlossaryTerm.getVersionNum(),
                     hGlossaryTerm.getLastChanged()));
         }
