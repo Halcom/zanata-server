@@ -57,6 +57,7 @@
   <lifecycle>
     <phase-listener>org.zanata.security.OpenIdPhaseListener</phase-listener>
     <phase-listener>org.zanata.ui.faces.FacesMessagesPhaseListener</phase-listener>
+    <phase-listener>org.zanata.ui.TransactionPhaseListener</phase-listener>
   </lifecycle>
 
   <render-kit>
@@ -115,36 +116,6 @@
       <if>#{identity.loggedIn}</if>
       <to-view-id>/dashboard/home.xhtml</to-view-id>
       <redirect/>
-    </navigation-case>
-  </navigation-rule>
-
-  <!-- Landing page for Kerberos ticket-based Authentication -->
-  <navigation-rule>
-    <from-view-id>/account/klogin.xhtml</from-view-id>
-    <navigation-case>
-      <if>#{authenticationManager.authenticationRedirect eq 'login'}</if>
-      <to-view-id>/account/login.xhtml</to-view-id>
-      <redirect />
-    </navigation-case>
-    <navigation-case>
-      <if>#{authenticationManager.authenticationRedirect eq 'edit'}</if>
-      <to-view-id>/profile/create_user.xhtml</to-view-id>
-      <redirect />
-    </navigation-case>
-    <navigation-case>
-      <if>#{authenticationManager.authenticationRedirect eq 'inactive'}</if>
-      <to-view-id>/account/inactive_account.xhtml</to-view-id>
-      <redirect />
-    </navigation-case>
-    <navigation-case>
-      <if>#{authenticationManager.authenticationRedirect eq 'dashboard'}</if>
-      <to-view-id>/dashboard/home.xhtml</to-view-id>
-      <redirect />
-    </navigation-case>
-    <navigation-case>
-      <if>#{authenticationManager.authenticationRedirect eq 'home'}</if>
-      <to-view-id>/home.xhtml</to-view-id>
-      <redirect />
     </navigation-case>
   </navigation-rule>
 
@@ -257,9 +228,13 @@
     <from-view-id>/version-group/create_version_group.xhtml</from-view-id>
     <navigation-case>
       <from-action>#{versionGroupHome.persist}</from-action>
-      <if>#{versionGroupHome.managed}</if>
-      <to-view-id>/version-group/home.xhtml</to-view-id>
-      <redirect/>
+      <to-view-id>/version-group/version_group.xhtml</to-view-id>
+      <redirect>
+        <view-param>
+          <name>slug</name>
+          <value>#{versionGroupHome.instance.slug}</value>
+        </view-param>
+      </redirect>
     </navigation-case>
   </navigation-rule>
 

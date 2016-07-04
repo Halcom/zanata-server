@@ -22,6 +22,8 @@
 
 package org.zanata.service.impl;
 
+import java.util.Map;
+
 import com.google.common.annotations.VisibleForTesting;
 import org.infinispan.manager.CacheContainer;
 import javax.annotation.PostConstruct;
@@ -29,13 +31,12 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import org.zanata.cache.CacheWrapper;
 import org.zanata.cache.InfinispanCacheWrapper;
+import org.zanata.common.ContentState;
 import org.zanata.common.LocaleId;
 import org.zanata.dao.LocaleDAO;
 import org.zanata.dao.ProjectIterationDAO;
-import org.zanata.dao.TextFlowDAO;
-import org.zanata.events.TextFlowTargetStateEvent;
+import org.zanata.events.DocStatsEvent;
 import org.zanata.model.HLocale;
-import org.zanata.model.HTextFlow;
 import org.zanata.service.VersionLocaleKey;
 import org.zanata.service.VersionStateCache;
 import org.zanata.ui.model.statistic.WordStatistic;
@@ -53,6 +54,7 @@ import javax.enterprise.event.TransactionPhase;
  */
 @Named("versionStateCacheImpl")
 @javax.enterprise.context.ApplicationScoped
+// TODO look at using @Transactional
 public class VersionStateCacheImpl implements VersionStateCache {
     private static final String BASE = VersionStateCacheImpl.class.getName();
 
@@ -90,19 +92,19 @@ public class VersionStateCacheImpl implements VersionStateCache {
     }
 
     @Override
-    public void textFlowStateUpdated(@Observes(during = TransactionPhase.AFTER_SUCCESS) TextFlowTargetStateEvent event) {
+    public void docStatsUpdated(
+        @Observes(during = TransactionPhase.AFTER_SUCCESS)
+        DocStatsEvent event) {
         VersionLocaleKey key =
-                new VersionLocaleKey(event.getProjectIterationId(),
-                        event.getLocaleId());
+            new VersionLocaleKey(event.getProjectVersionId(),
+                event.getKey().getLocaleId());
         WordStatistic stats = versionStatisticCache.get(key);
         if (stats != null) {
-            TextFlowDAO textFlowDAO = serviceLocator.getInstance(TextFlowDAO.class);
-            HTextFlow textFlow = textFlowDAO.findById(event.getTextFlowId());
-
-            stats.decrement(event.getPreviousState(),
-                    textFlow.getWordCount().intValue());
-            stats.increment(event.getNewState(),
-                    textFlow.getWordCount().intValue());
+            for (Map.Entry<ContentState, Long> entry : event
+                    .getWordDeltasByState().entrySet()) {
+                stats.increment(entry.getKey(),
+                        Math.toIntExact(entry.getValue()));
+            }
             versionStatisticCache.put(key, stats);
         }
     }

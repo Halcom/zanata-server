@@ -1,6 +1,42 @@
+## 4.0
+
+##### Bug Fixes
+* [ZNTA-846](https://zanata.atlassian.net/browse/ZNTA-846) - Group "request add project version" needs field limit
+* [ZNTA-872](https://zanata.atlassian.net/browse/ZNTA-872) - Redirect to home from cancel button in create user page
+
+##### Infrastructure Changes
+
+* Zanata's cache configuration (Infinispan) is now controlled by `zanata-infinispan.xml`, not `standalone.xml`. Please see the [Infinispan](user-guide/system-admin/configuration/infinispan) section for more information.
+
+The WildFly module for Hibernate 4.2 has been removed. Zanata will now use the version of Hibernate provided by
+WildFly. The Zanata installer no longer installs any modules for WildFly. If a previous version of the Zanata
+installer has put a Hibernate 4.2 module into your WildFly installation (in modules/org/hibernate/main) you should
+remove it.
+
 ## 3.9
 
+##### Infrastructure Changes
+* System admin can set system property `zanata.enforce.matchingusernames` to enforce matching username to be used for new user registration.
+* Zanata has eliminated all JNDI-based configuration and replaced it with system properties. Please see the following sections for how certain values are now configured:
+  * (/user-guide/system-admin/configuration/installation)
+  * (/user-guide/system-admin/configuration/authentication)
+  * (/user-guide/system-admin/configuration/document-storage-directory)
+
+##### New feature
+* [ZNTA-746](https://zanata.atlassian.net/browse/ZNTA-746) - Add shortcut key for approve and reject translation
+* [ZNTA-938](https://zanata.atlassian.net/browse/ZNTA-938) - Webhook event for translation update by user.
+* [ZNTA-746](https://zanata.atlassian.net/browse/ZNTA-746) - Add shorcut key for approve and reject translation
+* [ZNTA-1059](https://zanata.atlassian.net/browse/ZNTA-1059) - Language coordinator can contact team members
+* [ZNTA-858](https://zanata.atlassian.net/browse/ZNTA-858) - New side menu bar replace top and bottom panel
+* [ZNTA-855](https://zanata.atlassian.net/browse/ZNTA-855) - Add system property to enforce username for registration
+
+
+-----------------------
+
+## 3.9.0
 <h5>Infrastructure Changes</h5>
+* Recommended platform: JBoss EAP 6 (6.4.6.GA or later).
+* Alternative platform: WildFly version 10.x.
 * [ZNTA-530](https://zanata.atlassian.net/browse/ZNTA-530) - Replace Seam 2 with CDI
   * In WildFly or EAP `standalone.xml`, please make sure the Weld
     extension is present in the `extensions` section like this:
@@ -21,6 +57,61 @@
             ...
         </profiles>
 
+##### Changes
+ * [ZNTA-1067](https://zanata.atlassian.net/browse/ZNTA-1067) - Kerberos ticket authentication leads to mostly blank page
+ * [ZNTA-1017](https://zanata.atlassian.net/browse/ZNTA-1017) - Refactor translation update event to use batches
+ * [ZNTA-958](https://zanata.atlassian.net/browse/ZNTA-958) - Integrate sidebar
+ * [ZNTA-957](https://zanata.atlassian.net/browse/ZNTA-957) - User profile
+ * [ZNTA-956](https://zanata.atlassian.net/browse/ZNTA-956) - Migrate glossary to redux
+ * [ZNTA-939](https://zanata.atlassian.net/browse/ZNTA-939) - Update to WildFly 10 (ready for EAP 7)
+ * [ZNTA-905](https://zanata.atlassian.net/browse/ZNTA-905) - 0% matching translation listed in TM
+ * [ZNTA-894](https://zanata.atlassian.net/browse/ZNTA-894) - dswid is not unique after opening link in new tab (in projects list)
+ * [ZNTA-892](https://zanata.atlassian.net/browse/ZNTA-892) - Performance tests for REST in Jenkins
+ * [ZNTA-887](https://zanata.atlassian.net/browse/ZNTA-887) - Conversation scope message not displaying
+ * [ZNTA-879](https://zanata.atlassian.net/browse/ZNTA-879) - Display user email based on admin configuration
+ * [ZNTA-833](https://zanata.atlassian.net/browse/ZNTA-833) - Reduce JS runtime warnings and errors
+ * [ZNTA-797](https://zanata.atlassian.net/browse/ZNTA-797) - Replace SeamAutowire with real CDI in tests
+ * [ZNTA-793](https://zanata.atlassian.net/browse/ZNTA-793) - TranslationMemoryAction.lastTaskResult appears to be useless
+ * [ZNTA-744](https://zanata.atlassian.net/browse/ZNTA-744) - Add review data to the contribution statistics API
+ * [ZNTA-742](https://zanata.atlassian.net/browse/ZNTA-742) - Get a list of contributors for a Project version via the API
+ * [ZNTA-699](https://zanata.atlassian.net/browse/ZNTA-699) - Migrate page navigation flow from Seam pages.xml to faces-config.xml
+ * [ZNTA-684](https://zanata.atlassian.net/browse/ZNTA-684) - Migrate suggestions panel from AngularJS to ReactJS
+
+##### Bug Fixes
+ * [ZNTA-1128](https://zanata.atlassian.net/browse/ZNTA-1128) - Create version - entering a name before unchecking 'copy' breaks the list
+ * [ZNTA-1125](https://zanata.atlassian.net/browse/ZNTA-1125) - TransactionRequiredException on enabling project Invite Only
+ * [ZNTA-1120](https://zanata.atlassian.net/browse/ZNTA-1120) - Rest endpoint broken for alpha editor
+ * [ZNTA-1116](https://zanata.atlassian.net/browse/ZNTA-1116) - ResourceExceptions when saving a server config
+ * [ZNTA-1086](https://zanata.atlassian.net/browse/ZNTA-1086) - NullPointerException when uploading from client (tested with cs-CZ)
+ * [ZNTA-1084](https://zanata.atlassian.net/browse/ZNTA-1084) - NoSuchElementException when uploading empty data
+ * [ZNTA-1081](https://zanata.atlassian.net/browse/ZNTA-1081) - Should use @Synchronized for @SessionScoped beans
+ * [ZNTA-1075](https://zanata.atlassian.net/browse/ZNTA-1075) - Occasional NullPointerException in PasswordUtil.generateSaltedHash
+ * [ZNTA-1074](https://zanata.atlassian.net/browse/ZNTA-1074) - Glossary blurts entire exception stacktrace to user dialog
+ * [ZNTA-1072](https://zanata.atlassian.net/browse/ZNTA-1072) - [Regression] Cannot set multiple roles for a user
+ * [ZNTA-1068](https://zanata.atlassian.net/browse/ZNTA-1068) - Adding multiple languages to a project does not update the page
+ * [ZNTA-1066](https://zanata.atlassian.net/browse/ZNTA-1066) - Delete project still indicates "Obsolete" in the notification
+ * [ZNTA-1065](https://zanata.atlassian.net/browse/ZNTA-1065) - Drop-down user menu does not obscure the Glossary buttons
+ * [ZNTA-1060](https://zanata.atlassian.net/browse/ZNTA-1060) - Unable to upload translations on Wildfly 10
+ * [ZNTA-1013](https://zanata.atlassian.net/browse/ZNTA-1013) - Merge translation triggers exception when creating new TextFlowTarget
+ * [ZNTA-991](https://zanata.atlassian.net/browse/ZNTA-991) - Cannot change email addresses in app config (ClassNotFoundException)
+ * [ZNTA-981](https://zanata.atlassian.net/browse/ZNTA-981) - Uploading a .pot file via Web UI retains the extension
+ * [ZNTA-931](https://zanata.atlassian.net/browse/ZNTA-931) - Reset password feature fails on session closed
+ * [ZNTA-928](https://zanata.atlassian.net/browse/ZNTA-928) - Readonly project doesn't have "lock" icon in UI
+ * [ZNTA-871](https://zanata.atlassian.net/browse/ZNTA-871) - Changing user email address redirects to invalid page
+ * [ZNTA-870](https://zanata.atlassian.net/browse/ZNTA-870) - Reset Password feature not inserting key into database
+ * [ZNTA-850](https://zanata.atlassian.net/browse/ZNTA-850) - org.zanata.async.AsyncTaskManager:  Exception when executing an asynchronous task.
+ * [ZNTA-804](https://zanata.atlassian.net/browse/ZNTA-804) - Coordinators' email addresses should be BCC in Contact Coordinator
+ * [ZNTA-693](https://zanata.atlassian.net/browse/ZNTA-693) - ClientAbortException: java.net.SocketException: Connection reset
+ * [ZNTA-668](https://zanata.atlassian.net/browse/ZNTA-668) - ServerConfiguration tests unstable
+ * [ZNTA-537](https://zanata.atlassian.net/browse/ZNTA-537) - Expired sessions have poor usability
+ * [ZNTA-470](https://zanata.atlassian.net/browse/ZNTA-470) - RFE: Prevent user sending large text in 'contact admin' emails
+ * [ZNTA-412](https://zanata.atlassian.net/browse/ZNTA-412) - RFE: Link displayed usernames to profile page
+ * [ZNTA-393](https://zanata.atlassian.net/browse/ZNTA-393) - Redirect to a "good" page if URL is not known to zanata
+ * [ZNTA-358](https://zanata.atlassian.net/browse/ZNTA-358) - Unable to sign up with user specified OpenID
+ * [ZNTA-54](https://zanata.atlassian.net/browse/ZNTA-54) - Can't remove languages
+ * [ZNTA-12](https://zanata.atlassian.net/browse/ZNTA-12) - User cannot send two messages to admin in a row
+<h5>New Features</h5>
+* [ZNTA-689](https://zanata.atlassian.net/browse/ZNTA-689) - Support Qt TS files
 
 <h5>Bug fixes</h5>
 * [ZNTA-804](https://zanata.atlassian.net/browse/ZNTA-804) - Coordinators' email addresses should be BCC in Contact Coordinator
@@ -31,15 +122,27 @@
 * [ZNTA-412](https://zanata.atlassian.net/browse/ZNTA-412) - Profile link to project maintainers, language members, and version group maintainers
 * [ZNTA-905](https://zanata.atlassian.net/browse/ZNTA-905) - Remove 0% matching translation memory entry
 * [ZNTA-928](https://zanata.atlassian.net/browse/ZNTA-928) - Readonly project doesn't have "lock" icon in UI
-* [ZNTA-793](https://zanata.atlassian.net/browse/ZNTA-793) - Remove unused method in TranslationMemoryAction
 * [ZNTA-54](https://zanata.atlassian.net/browse/ZNTA-54) - Allow delete language
+* [ZNTA-1066](https://zanata.atlassian.net/browse/ZNTA-1066) - Delete project still indicates "Obsolete" in the notification
+* [ZNTA-1068](https://zanata.atlassian.net/browse/ZNTA-1068) - Refresh page after adding language in project page
+* [ZNTA-1074](https://zanata.atlassian.net/browse/ZNTA-1074) - Hide notification details section
+* [ZNTA-1065](https://zanata.atlassian.net/browse/ZNTA-1065) - Drop-down user menu does not obscure the Glossary buttons
+* [ZNTA-1086](https://zanata.atlassian.net/browse/ZNTA-1086) - NullPointerException when uploading from client (tested with cs-CZ)
+
+* [ZNTA-981](https://zanata.atlassian.net/browse/ZNTA-981) - Remove file extension for gettext project file type
 
 <h5>Infrastructure Changes</h5>
 * Recommended platform: JBoss EAP 6 (6.4.6.GA or later).
 * Alternative platform: WildFly version 10.x.
 
 -----------------------
+
 ## 3.8.4
+##### Changes
+* [ZNTA-1000](https://zanata.atlassian.net/browse/ZNTA-1000) - Try catch finally on copy version action, logging exception
+* [ZNTA-1001](https://zanata.atlassian.net/browse/ZNTA-1001) - Investigate and fix: copy version fails silently after triggering
+
+
 <h5>Bug fixes</h5>
 * [ZNTA-959](https://zanata.atlassian.net/browse/ZNTA-959) - Copy version fails silently and leaves version readonly
 * [ZNTA-1013](https://zanata.atlassian.net/browse/ZNTA-1013) - Fix Merge translation exception

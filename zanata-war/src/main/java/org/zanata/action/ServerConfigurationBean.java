@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import javax.enterprise.event.Event;
+import javax.enterprise.inject.Model;
+import javax.faces.bean.ViewScoped;
 import javax.validation.constraints.Pattern;
 
 import lombok.Data;
@@ -54,8 +56,9 @@ import org.zanata.ui.faces.FacesMessages;
 import static org.zanata.model.HApplicationConfiguration.*;
 
 @Named("serverConfigurationBean")
-@javax.faces.bean.ViewScoped
-
+@ViewScoped
+@Model
+@Transactional
 @CheckRole("admin")
 @Slf4j
 public class ServerConfigurationBean implements Serializable {
@@ -117,6 +120,12 @@ public class ServerConfigurationBean implements Serializable {
     private boolean displayUserEmail;
     private PropertyWithKey<Boolean> displayUserEmailProperty = new PropertyWithKey<Boolean>("displayUserEmail", KEY_DISPLAY_USER_EMAIL);
 
+    
+    @Getter
+    @Setter
+    private boolean strictPermissions;
+    private PropertyWithKey<Boolean> strictPermissionsProperty = new PropertyWithKey<Boolean>("strictPermissions", KEY_STRICT_PERMISSIONS);
+
     @Getter
     @Setter
     private String logDestinationEmails;
@@ -174,6 +183,7 @@ public class ServerConfigurationBean implements Serializable {
             new PropertyWithKey<String>("maxActiveRequestsPerApiKey", KEY_MAX_ACTIVE_REQ_PER_API_KEY),
             new PropertyWithKey<String>("maxFilesPerUpload", KEY_MAX_FILES_PER_UPLOAD),
             new PropertyWithKey<String>("displayUserEmail", KEY_DISPLAY_USER_EMAIL),
+            new PropertyWithKey<String>("strictPermissions", KEY_STRICT_PERMISSIONS),
             homeContentProperty
     );
 

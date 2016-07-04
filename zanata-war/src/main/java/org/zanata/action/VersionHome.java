@@ -42,8 +42,9 @@ import org.hibernate.criterion.NaturalIdentifier;
 import org.hibernate.criterion.Restrictions;
 
 import javax.annotation.Nullable;
-import javax.enterprise.context.RequestScoped;
 import javax.enterprise.inject.Any;
+import javax.enterprise.inject.Model;
+import javax.faces.bean.ViewScoped;
 import javax.inject.Inject;
 import javax.inject.Named;
 import org.zanata.common.DocumentType;
@@ -53,6 +54,8 @@ import org.zanata.common.ProjectType;
 import org.zanata.dao.ProjectDAO;
 import org.zanata.dao.ProjectIterationDAO;
 import org.zanata.dao.LocaleDAO;
+import org.zanata.exception.ProjectNotFoundException;
+import org.zanata.exception.VersionNotFoundException;
 import org.zanata.i18n.Messages;
 import org.zanata.model.HLocale;
 import org.zanata.model.HProject;
@@ -83,18 +86,14 @@ import java.util.Map;
 import java.util.ResourceBundle;
 
 @Named("versionHome")
-@RequestScoped
+@ViewScoped
+@Model
+@Transactional
 @Slf4j
 public class VersionHome extends SlugHome<HProjectIteration> implements
     HasLanguageSettings, Serializable {
 
     private static final long serialVersionUID = 1L;
-
-    /**
-     * This field is set from http parameter which will be the original slug
-     */
-//    @Getter
-//    private String slug;
 
     /**
      * This field is set from form input which can differ from original slug
@@ -105,10 +104,6 @@ public class VersionHome extends SlugHome<HProjectIteration> implements
     private String inputSlugValue;
 
     private Long versionId;
-
-//    @Getter
-//    @Setter
-//    private String projectSlug;
 
     @Inject
     @Any
@@ -271,6 +266,9 @@ public class VersionHome extends SlugHome<HProjectIteration> implements
     @Override
     protected HProjectIteration loadInstance() {
         Session session = (Session) getEntityManager().getDelegate();
+        HProject project = (HProject) session.byNaturalId(HProject.class)
+           .using("slug", getProjectSlug()).load();
+        validateProjectState(project);
         if (versionId == null) {
             HProjectIteration iteration = (HProjectIteration) session
                     .byNaturalId(HProjectIteration.class)
@@ -294,7 +292,16 @@ public class VersionHome extends SlugHome<HProjectIteration> implements
             log.warn(
                     "Project version [id={}, slug={}], does not exist or is soft deleted: {}",
                     versionId, getSlug(), iteration);
-            throw new EntityNotFoundException();
+            throw new VersionNotFoundException(getProjectSlug(), getSlug());
+        }
+    }
+
+    private void validateProjectState(HProject project) {
+        if (project == null || project.getStatus() == EntityStatus.OBSOLETE) {
+            log.warn(
+                "Project [slug={}], does not exist or is soft deleted: {}",
+                getProjectSlug(), project);
+            throw new ProjectNotFoundException(getProjectSlug());
         }
     }
 
@@ -410,7 +417,7 @@ public class VersionHome extends SlugHome<HProjectIteration> implements
         conversationScopeMessages
                 .setMessage(FacesMessage.SEVERITY_INFO, msgs.
                         format("jsf.copyVersion.started",
-                                getInstance().getSlug(), copyFromVersionSlug));
+                            inputSlugValue, copyFromVersionSlug));
     }
 
     public void setSlug(String slug) {
@@ -516,7 +523,7 @@ public class VersionHome extends SlugHome<HProjectIteration> implements
 
         if (softDeleted) {
             String url = urlUtil.projectUrl(getProjectSlug());
-            urlUtil.redirectTo(url);
+            urlUtil.redirectToInternal(url);
             return state;
         }
 

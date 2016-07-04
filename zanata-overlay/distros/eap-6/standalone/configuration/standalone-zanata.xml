@@ -32,6 +32,11 @@
         <property name="javamelody.storage-directory" value="${user.home}/zanata/stats"/>
         <property name="hibernate.search.default.indexBase" value="${user.home}/zanata/indexes"/>
         <property name="jboss.as.management.blocking.timeout" value="1000"/>
+        <property name="zanata.security.authpolicy.internal" value="zanata.internal"/>
+        <property name="zanata.security.authpolicy.openid" value="zanata.openid"/>
+        <!--<property name="zanata.security.adminusers" value=""/>-->
+        <property name="zanata.email.defaultfromaddress" value="no-reply@zanata.org"/>
+        <property name="zanata.file.directory" value="${user.home}/zanata/files"/>
     </system-properties>
 
 
@@ -162,7 +167,7 @@
                 </datasource>
                 <datasource jndi-name="java:jboss/datasources/zanataDatasource"
                   pool-name="zanataDatasource" enabled="true" use-ccm="true">
-                    <connection-url>jdbc:mysql://localhost:3306/zanata?characterEncoding=UTF-8</connection-url>
+                    <connection-url>${zanata.db.url}</connection-url>
                     <driver-class>com.mysql.jdbc.Driver</driver-class>
                     <driver>mysql-connector-java.jar</driver>
                     <pool>
@@ -171,7 +176,8 @@
                         <flush-strategy>FailingConnectionOnly</flush-strategy>
                     </pool>
                     <security>
-                        <user-name>root</user-name>
+                        <user-name>${zanata.db.username}</user-name>
+                        <password>${zanata.db.password}</password>
                     </security>
                     <statement>
                         <track-statements>NOWARN</track-statements>
@@ -250,19 +256,6 @@
                 <local-cache name="timestamps" statistics-enabled="true">
                     <transaction mode="NONE"/>
                     <eviction strategy="NONE"/>
-                </local-cache>
-            </cache-container>
-            <!--
-            Zanata multi-purpose caches.
-            -->
-            <cache-container name="zanata" default-cache="default"
-                jndi-name="java:jboss/infinispan/container/zanata"
-                start="EAGER"
-                module="org.jboss.as.clustering.web.infinispan">
-                <local-cache name="default">
-                    <transaction mode="NON_XA" />
-                    <eviction strategy="LRU" max-entries="10000" />
-                    <expiration max-idle="100000" />
                 </local-cache>
             </cache-container>
         </subsystem>
@@ -394,11 +387,6 @@
         </subsystem>
         <subsystem xmlns="urn:jboss:domain:naming:1.4">
             <bindings>
-                <simple name="java:global/zanata/security/auth-policy-names/internal" value="zanata.internal"/>
-                <simple name="java:global/zanata/security/auth-policy-names/openid" value="zanata.openid"/>
-                <!--<simple name="java:global/zanata/security/admin-users" value=""/>-->
-                <simple name="java:global/zanata/files/document-storage-directory" value="${user.home}/zanata/files"/>
-                <simple name="java:global/zanata/email/default-from-address" value="no-reply@zanata.org"/>
             </bindings>
             <remote-naming/>
         </subsystem>

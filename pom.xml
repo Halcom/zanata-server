@@ -2,13 +2,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <artifactId>server</artifactId>
-  <version>3.9.0-SNAPSHOT</version>
+  <version>4.0.0-SNAPSHOT</version>
   <name>Zanata server modules</name>
   <packaging>pom</packaging>
   <parent>
     <groupId>org.zanata</groupId>
     <artifactId>zanata-parent</artifactId>
-    <version>28-SNAPSHOT</version>
+    <version>29-SNAPSHOT</version>
     <relativePath>../parent</relativePath>
   </parent>
 
@@ -34,18 +34,18 @@
     <!-- Applies to surefire and failsafe (if enabled) -->
     <failIfNoTests>true</failIfNoTests>
 
-    <deltaspike.version>1.5.4</deltaspike.version>
+    <deltaspike.version>1.7.0</deltaspike.version>
     <cdi.runtime>runtime</cdi.runtime>
     <cdi.compile>compile</cdi.compile>
     <picketlink.version>2.5.4.SP4</picketlink.version>
-    <infinispan.version>6.0.2.Final</infinispan.version>
+    <infinispan.version>7.2.5.Final</infinispan.version>
     <lombok.version>1.16.6</lombok.version>
     <weld.version>1.1.31.Final</weld.version>
     <weld.se.version>${weld.version}</weld.se.version>
     <groovy.version>2.4.5</groovy.version>
     <guava.version>19.0</guava.version>
     <gwt.version>2.7.0</gwt.version>
-    <icu4j.version>50.1.1</icu4j.version>
+    <icu4j.version>56.1</icu4j.version>
     <lombok.source.dir>${project.build.sourceDirectory}/org/zanata</lombok.source.dir>
     <lucene.version>3.6.2</lucene.version>
     <org.mock-server.version>3.9.17</org.mock-server.version>
@@ -82,16 +82,17 @@
     -->
 
     <solr.version>${lucene.version}</solr.version>
+    <seam.version>2.3.1.Final</seam.version>
     <slf4j.version>1.7.18</slf4j.version>
     <gwteventservice.version>1.2.1</gwteventservice.version>
-    <okapi.version>0.22</okapi.version>
+    <okapi.version>0.29</okapi.version>
 
-    <zanata.assets.version>8.2</zanata.assets.version>
-    <zanata.api.version>3.9.0-SNAPSHOT</zanata.api.version>
+    <zanata.assets.version>9.0-SNAPSHOT</zanata.assets.version>
+    <zanata.api.version>4.0.0-SNAPSHOT</zanata.api.version>
     <!-- This should always be the previous version of the used api version above (but only 3.0.1 or later will work) -->
-    <zanata.api.compat.version>3.8.3</zanata.api.compat.version>
-    <zanata.client.version>3.8.1</zanata.client.version>
-    <zanata.common.version>3.8.1</zanata.common.version>
+    <zanata.api.compat.version>3.9.0</zanata.api.compat.version>
+    <zanata.client.version>4.0.0-SNAPSHOT</zanata.client.version>
+    <zanata.common.version>4.0.0-SNAPSHOT</zanata.common.version>
 
     <richfaces.version>4.5.11.Final</richfaces.version>
 
@@ -256,6 +257,14 @@
             <artifactId>jcip-annotations</artifactId>
             <groupId>net.jcip</groupId>
           </exclusion>
+          <exclusion>
+            <groupId>org.jboss.spec.javax.annotation</groupId>
+            <artifactId>jboss-annotations-api_1.2_spec</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.spec.javax.ws.rs</groupId>
+            <artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
 
@@ -280,7 +289,7 @@
       <dependency>
         <groupId>org.yaml</groupId>
         <artifactId>snakeyaml</artifactId>
-        <version>1.13</version>
+        <version>1.16</version>
       </dependency>
 
       <dependency>
@@ -351,7 +360,7 @@
       <dependency>
         <groupId>commons-codec</groupId>
         <artifactId>commons-codec</artifactId>
-        <version>1.9</version>
+        <version>1.10</version>
       </dependency>
 
       <dependency>
@@ -473,6 +482,12 @@
       </dependency>
 
       <dependency>
+        <groupId>org.jboss.resteasy</groupId>
+        <artifactId>resteasy-client</artifactId>
+        <version>${resteasy.version}</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.jboss.shrinkwrap.descriptors</groupId>
         <artifactId>shrinkwrap-descriptors-api-base</artifactId>
         <version>${shrinkwrap.desc.version}</version>
@@ -515,6 +530,18 @@
       </dependency>
 
       <dependency>
+        <groupId>org.jboss.spec.javax.interceptor</groupId>
+        <artifactId>jboss-interceptors-api_1.1_spec</artifactId>
+        <version>1.0.1.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jboss.spec.javax.annotation</groupId>
+        <artifactId>jboss-annotations-api_1.1_spec</artifactId>
+        <version>1.0.1.Final</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
         <groupId>org.jboss.xnio</groupId>
         <artifactId>xnio-api</artifactId>
         <version>3.2.3.Final</version>
@@ -529,14 +556,14 @@
       <dependency>
         <groupId>org.jboss.marshalling</groupId>
         <artifactId>jboss-marshalling</artifactId>
-        <version>1.4.6.Final</version>
+        <version>1.4.10.Final</version>
         <scope>test</scope>
       </dependency>
 
       <dependency>
         <groupId>org.jboss.marshalling</groupId>
         <artifactId>jboss-marshalling-river</artifactId>
-        <version>1.4.6.Final</version>
+        <version>1.4.10.Final</version>
         <scope>test</scope>
       </dependency>
 
@@ -663,6 +690,10 @@
           <exclusion>
             <groupId>javax.xml.bind</groupId>
             <artifactId>jaxb-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.spec.javax.ws.rs</groupId>
+            <artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -888,6 +919,10 @@
             <groupId>net.sf.okapi.logbind</groupId>
             <artifactId>build-log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
 
@@ -912,12 +947,28 @@
             <groupId>net.sf.okapi.logbind</groupId>
             <artifactId>build-log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
 
       <dependency>
         <groupId>net.sf.okapi.filters</groupId>
         <artifactId>okapi-filter-regex</artifactId>
+        <version>${okapi.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>net.sf.okapi.logbind</groupId>
+            <artifactId>build-log4j</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+
+      <dependency>
+        <groupId>net.sf.okapi.filters</groupId>
+        <artifactId>okapi-filter-ts</artifactId>
         <version>${okapi.version}</version>
         <exclusions>
           <exclusion>
@@ -968,7 +1019,16 @@
         <artifactId>cssparser</artifactId>
         <version>0.9.18</version>
       </dependency>
-
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-jaxrs</artifactId>
+        <version>1.9.13</version>
+      </dependency>
+      <dependency>
+        <groupId>org.richfaces</groupId>
+        <artifactId>richfaces-a4j</artifactId>
+        <version>${richfaces.version}</version>
+      </dependency>
       <dependency>
         <groupId>org.hibernate</groupId>
         <artifactId>hibernate-search-orm</artifactId>
@@ -1136,34 +1196,6 @@
       </dependency>
       <dependency>
         <groupId>org.jboss.resteasy</groupId>
-        <artifactId>resteasy-jaxrs</artifactId>
-        <version>${resteasy.version}</version>
-        <scope>${resteasy.scope}</scope>
-        <exclusions>
-          <exclusion>
-            <groupId>javassist</groupId>
-            <artifactId>javassist</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>javax.annotation</groupId>
-            <artifactId>jsr250-api</artifactId>
-          </exclusion>
-          <exclusion>
-            <artifactId>jcip-annotations</artifactId>
-            <groupId>net.jcip</groupId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.jboss.spec.javax.annotation</groupId>
-            <artifactId>jboss-annotations-api_1.2_spec</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.jboss.spec.javax.ws.rs</groupId>
-            <artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
-          </exclusion>
-        </exclusions>
-      </dependency>
-      <dependency>
-        <groupId>org.jboss.resteasy</groupId>
         <artifactId>resteasy-jaxb-provider</artifactId>
         <version>${resteasy.version}</version>
         <scope>${resteasy.scope}</scope>
@@ -1222,6 +1254,14 @@
           </exclusion>
         </exclusions>
       </dependency>
+
+      <dependency>
+        <groupId>org.jsoup</groupId>
+        <artifactId>jsoup</artifactId>
+        <version>1.7.1</version>
+        <scope>test</scope>
+      </dependency>
+
       <dependency>
         <groupId>org.apache.lucene</groupId>
         <artifactId>lucene-core</artifactId>
@@ -1576,6 +1616,7 @@
 
                 <!-- Use org.jboss.resteasy:jaxrs-api (since we package resteasy) -->
                 <exclude>org.jboss.spec.javax.ws.rs:jboss-jaxrs-api_1.1_spec</exclude>
+                <exclude>org.jboss.spec.javax.ws.rs:jboss-jaxrs-api_2.0_spec</exclude>
 
                 <!-- use org.jboss.spec.javax.servlet:jboss-servlet-api_3.0_spec -->
                 <exclude>org.jboss.spec.javax.servlet:jboss-servlet-api_3.1_spec</exclude>
@@ -1884,34 +1925,6 @@
         <hibernate.module.url>https://bintray.com/artifact/download/sflanigan/generic/${hibernate.module.filename}</hibernate.module.url>
       </properties>
 
-      <build>
-        <plugins>
-          <!--
-          Download wildfly modules from sf.net and extract under appserver.home
-          -->
-          <plugin>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>install-wildfly-modules</id>
-                <!-- submodules should use 'package' to activate this -->
-                <phase>none</phase>
-                <goals>
-                  <goal>run</goal>
-                </goals>
-                <configuration>
-                  <target unless="skipITs">
-                    <mkdir dir="${download.dir}" />
-                    <get src="${hibernate.module.url}" dest="${download.dir}/${hibernate.module.filename}" skipexisting="true" />
-                    <unzip src="${download.dir}/${hibernate.module.filename}" dest="${appserver.home}" />
-                  </target>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-
       <!-- These override the older versions forced by jboss-as-parent 7.2.0 -->
       <dependencyManagement>
         <dependencies>
@@ -1982,12 +1995,6 @@
             <groupId>org.jboss.logmanager</groupId>
             <artifactId>jboss-logmanager</artifactId>
             <version>1.5.2.Final</version>
-            <scope>test</scope>
-          </dependency>
-          <dependency>
-            <groupId>org.jboss.marshalling</groupId>
-            <artifactId>jboss-marshalling</artifactId>
-            <version>1.4.6.Final</version>
             <scope>test</scope>
           </dependency>
           <dependency>

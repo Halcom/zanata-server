@@ -34,6 +34,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.enterprise.inject.Model;
 import javax.faces.application.FacesMessage;
 import javax.faces.bean.ViewScoped;
 import javax.validation.ConstraintViolationException;
@@ -42,8 +43,11 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import javax.inject.Inject;
 import javax.inject.Named;
+
+import org.apache.deltaspike.jpa.api.transaction.Transactional;
 import org.richfaces.event.FileUploadEvent;
 import org.richfaces.model.UploadedFile;
+import org.zanata.events.DocumentLocaleKey;
 import org.zanata.exception.AuthorizationException;
 import org.zanata.async.handle.CopyVersionTaskHandle;
 import org.zanata.common.DocumentType;
@@ -108,6 +112,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Named("versionHomeAction")
 @ViewScoped
+@Model
+@Transactional
 @Slf4j
 public class VersionHomeAction extends AbstractSortAction implements
         Serializable {
@@ -541,14 +547,6 @@ public class VersionHomeAction extends AbstractSortAction implements
             loadStatistics();
         }
         this.pageRendered = pageRendered;
-    }
-
-    @Getter
-    @AllArgsConstructor
-    @EqualsAndHashCode
-    public class DocumentLocaleKey {
-        private Long documentId;
-        private LocaleId localeId;
     }
 
     public WordStatistic getStatisticsForLocale(LocaleId localeId) {

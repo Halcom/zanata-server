@@ -22,6 +22,7 @@ package org.zanata.security;
 
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Session;
+import org.zanata.ApplicationConfiguration;
 import org.zanata.dao.PersonDAO;
 import org.zanata.dao.ProjectLocaleMemberDAO;
 import org.zanata.dao.ProjectMemberDAO;
@@ -35,6 +36,7 @@ import org.zanata.model.HProject;
 import org.zanata.model.HProjectIteration;
 import org.zanata.model.LocaleRole;
 import org.zanata.model.ProjectRole;
+import org.zanata.rest.editor.service.resource.LocalesResource;
 import org.zanata.security.annotations.Authenticated;
 import org.zanata.security.permission.GrantsPermission;
 import org.zanata.security.permission.PermissionProvider;
@@ -70,6 +72,9 @@ public class SecurityFunctions extends PermissionProvider {
 
     @Inject
     private ZanataIdentity identity;
+    
+    @Inject
+    private ApplicationConfiguration applicationConfiguration;
 
     @Inject
     @Authenticated
@@ -169,14 +174,23 @@ public class SecurityFunctions extends PermissionProvider {
 
     /* anyone can read a project */
     @GrantsPermission(actions = "read")
-    public static boolean canReadProject(HProject target) {
-        return true;
+    public boolean canReadProject(HProject target) {
+    	if(applicationConfiguration.isStrictPermissions()){
+            return isUserAllowedAccess(target);
+    	}
+    	
+    	return true;
     }
+    
 
     /* anyone can read a project iteration */
     @GrantsPermission(actions = "read")
-    public static boolean canReadProjectIteration(HProjectIteration target) {
-        return true;
+    public boolean canReadProjectIteration(HProjectIteration target) {
+    	if(applicationConfiguration.isStrictPermissions()){
+            return isUserAllowedAccess(target.getProject());
+    	}
+    	
+    	return true;
     }
 
     /*
@@ -381,6 +395,12 @@ public class SecurityFunctions extends PermissionProvider {
         return identity.hasRole("glossarist");
     }
 
+    /* Loggin user can download glossary */
+    @GrantsPermission(actions = { "glossary-download" })
+    public boolean canDownloadGlossary() {
+        return identity.isLoggedIn();
+    }
+
     /* 'glossarist-admin' can also delete */
     @GrantsPermission(actions = { "glossary-insert", "glossary-update",
             "glossary-delete" })
@@ -571,6 +591,10 @@ public class SecurityFunctions extends PermissionProvider {
             log.debug("Allow rest access for Zanata test");
             return true;
         }
+        if(isLocalesServicePath(restServicePath)) {
+            log.debug("Allow rest access for /locales path (Zanata UI)");
+            return true;
+        }
         if (account != null) {
             return true;
         }
@@ -608,6 +632,16 @@ public class SecurityFunctions extends PermissionProvider {
                         // when being called in ZanataRestSecurityInterceptor
                 servicePath.startsWith("/test")
         );
+    }
+
+    /**
+     * Check if request path is Zanata UI locale endpoint.
+     * This endpoint is used for getting list of locales internationalised
+     * in Zanata, update locale in Zanata instance.
+     */
+    private static boolean isLocalesServicePath(String servicePath) {
+        return servicePath != null && servicePath.contains("/rest" +
+            LocalesResource.SERVICE_PATH);
     }
 
     private static class AutoCloseSession implements AutoCloseable {
